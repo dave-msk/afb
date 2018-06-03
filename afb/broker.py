@@ -18,7 +18,7 @@ from __future__ import print_function
 
 from threading import Lock
 
-from broker.manufacturer import Manufacturer
+from afb.manufacturer import Manufacturer
 
 
 class Broker(object):
@@ -37,13 +37,13 @@ class Broker(object):
   mftr_a = Manufacturer(A)
   mftr_b = Manufacturer(B)
 
-  broker = Broker()
+  afb = Broker()
 
-  broker.register(mftr_a)
-  broker.register(mftr_b)
+  afb.register(mftr_a)
+  afb.register(mftr_b)
   # Or one can simply call the `register_all` method to register an iterable
   # of `Manufacturer`s.
-  # broker.register_all([mftr_a, mftr_b])
+  # afb.register_all([mftr_a, mftr_b])
   ```
   """
 

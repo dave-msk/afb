@@ -1,4 +1,4 @@
-# Broker
+# Abstract Factory Broker
 
 This package provides a base mechanism of the abstract factory pattern in Python.
 
