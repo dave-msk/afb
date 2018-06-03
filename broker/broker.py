@@ -18,7 +18,7 @@ from __future__ import print_function
 
 from threading import Lock
 
-from manufacturer import Manufacturer
+from broker.manufacturer import Manufacturer
 
 
 class Broker(object):
