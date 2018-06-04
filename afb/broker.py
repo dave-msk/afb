@@ -79,7 +79,7 @@ class Broker(object):
   def make(self, cls, params):
 
     if cls in self.PRIMITIVES:
-      return cls(params)
+      return cls(params) if params is not None else None
 
     if cls in self.CONTAINERS:
       raise TypeError("Multi-level type nesting is not supported.")

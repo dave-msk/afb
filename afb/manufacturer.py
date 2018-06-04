@@ -249,14 +249,14 @@ class Manufacturer(object):
     return tuple([self._get_from_broker(t, p) for t, p in zip(arg_type, params)])
 
   def _transform_arg_dict(self, method, kwarg, arg_type, params):
-    keys = set(arg_type.keys())
-    if not isinstance(params, dict) or keys != set(params.keys()):
-      raise TypeError("`params` must be a dictionary with the same keys "
-                      "as the dictionary argument. Manufacturer: {}, "
-                      "Method: {}, Argument: {}, Expected Keys: {}, "
-                      "Given Keys: {}".format(
-          self.cls, method, kwarg, sorted(keys), sorted(params.keys())))
-    return {k: self._get_from_broker(arg_type[k], params[k]) for k in keys}
+    if len(arg_type) != 1:
+      raise ValueError("Only dictionaries with homogeneous keys and values "
+                       "are allowed. Manufacturer: {}, Method: {}, "
+                       "Argument: {}, Given: {}."
+                       .format(self.cls, method, kwarg, arg_type))
+    k_t, v_t = iter(arg_type.items()).__next__()
+    return {self._get_from_broker(k_t, k):
+            self._get_from_broker(v_t, v) for k, v in params.items()}
 
   def _get_from_broker(self, key, params):
     return self._broker.make(key, params)
