@@ -56,7 +56,10 @@ class Broker(object):
 
   @property
   def classes(self):
-    return self._manufacturers.keys()
+    return list(self._manufacturers.keys())
+
+  def get_manufacturer(self, cls):
+    return self._manufacturers.get(cls)
 
   def register(self, manufacturer):
     if not isinstance(manufacturer, Manufacturer):

@@ -161,11 +161,18 @@ class Manufacturer(object):
       raise TypeError("`sig` must be a dict mapping factory arguments "
                       "to their corresponding types.")
 
-    factory_args = fn_args(factory)
-    if factory_args != set(sig.keys()):
-      raise ValueError("Factory signature does not match with `sig`. "
-                       "Expected: {}, Given: {}".format(
-          sorted(factory_args), set(sig.keys())))
+    required_params, all_params = fn_args(factory)
+    sig_params = set(sig.keys())
+    missing_args = required_params - sig_params
+    if missing_args:
+      raise ValueError("Missing required arguments from `sig`.\nRequired: {}, "
+                       "Given: {}".format(sorted(required_params),
+                                          sorted(sig_params)))
+
+    invalid_args = sig_params - all_params
+    if invalid_args:
+      raise ValueError("Invalid arguments. Expected: {}, Given: {}."
+                       .format(sorted(all_params), sorted(sig_params)))
 
     with self._lock:
       if method in self._factories:
@@ -263,4 +270,7 @@ class Manufacturer(object):
 
 
 def fn_args(func):
-  return set(inspect.signature(func).parameters.keys())
+  sig = inspect.signature(func)
+  required = {k for k, v in sig.parameters.items()
+              if v.default == inspect.Parameter.empty}
+  return required, set(sig.parameters.keys())
