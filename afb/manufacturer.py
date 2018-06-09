@@ -198,7 +198,8 @@ class Manufacturer(object):
       if method in self._factories:
         raise ValueError("The method `{}` is already registered."
                          .format(method))
-      self._factories[method] = {'fn': factory, 'sig': sig, 'params': params}
+      self._factories[method] = {'fn': factory, 'sig': sig,
+                                 'rqd_args': rqd_args, 'params': params}
 
   def make(self, method=None, params=None):
     """Make object according to specification.
@@ -233,11 +234,17 @@ class Manufacturer(object):
 
     # 1. Get factory and signature
     fty_spec = self._factories[method]
-    fty, sig = fty_spec['fn'], fty_spec['sig']
+    fty = fty_spec['fn']
+    sig = fty_spec['sig']
+    rqd_args = fty_spec['rqd_args']
     params = params or fty_spec['params']
     errors.validate_args(params.keys(), sig.keys())
 
-    # 2. Transform arguments
+    # 2. Prepare arguments
+    #   2.1. Add `None` to required arguments if not provided
+    params.update({k: None for k in rqd_args if k not in params})
+
+    #   2.2. Transform arguments
     for k, p in params.items():
       arg_type = sig[k]
       if isinstance(arg_type, list):
