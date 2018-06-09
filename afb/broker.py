@@ -19,6 +19,7 @@ from __future__ import print_function
 from threading import Lock
 
 from afb.manufacturer import Manufacturer
+from afb.utils import errors
 
 
 class Broker(object):
@@ -34,16 +35,16 @@ class Broker(object):
   To link manufacturers through a Broker, call the `register` method:
 
   ```python
-  mftr_a = Manufacturer(A)
-  mftr_b = Manufacturer(B)
+  mfr_a = Manufacturer(A)
+  mfr_b = Manufacturer(B)
 
   afb = Broker()
 
-  afb.register(mftr_a)
-  afb.register(mftr_b)
+  afb.register(mfr_a)
+  afb.register(mfr_b)
   # Or one can simply call the `register_all` method to register an iterable
   # of `Manufacturer`s.
-  # afb.register_all([mftr_a, mftr_b])
+  # afb.register_all([mfr_a, mfr_b])
   ```
   """
 
@@ -73,26 +74,25 @@ class Broker(object):
 
   def register_all(self, manufacturers):
     checked = []
-    for manufacturer in manufacturers:
-      if not isinstance(manufacturer, Manufacturer):
+    for mfr in manufacturers:
+      if not isinstance(mfr, Manufacturer):
         raise TypeError("Only Manufacturer is allowed for registration.")
-      checked.append(manufacturer)
-    [self.register(mftr) for mftr in checked]
+      checked.append(mfr)
+    [self.register(mfr) for mfr in checked]
 
-  def make(self, cls, params):
+  def make(self, cls, params=None):
 
     if cls in self.PRIMITIVES:
-      return cls(params) if params is not None else None
+      return cls(params or cls())
 
     if cls in self.CONTAINERS:
       raise TypeError("Multi-level type nesting is not supported.")
 
-    manufacturer = self._manufacturers.get(cls, None)
-    if manufacturer is None:
+    mfr = self._manufacturers.get(cls, None)
+    if mfr is None:
       raise KeyError("Unregistered manufacturer for class: {}".format(cls))
 
-    if not isinstance(params, dict):
-      raise TypeError("`params` must be a dictionary. Given: {}"
-                      .format(type(params)))
+    params = params or {}
+    errors.validate_kwargs(params, 'params')
 
-    return manufacturer.make(**params)
+    return mfr.make(**params)

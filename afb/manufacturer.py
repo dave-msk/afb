@@ -21,6 +21,8 @@ from threading import Lock
 import inspect
 import six
 
+from afb.utils import errors
+
 
 class Manufacturer(object):
   """An abstract factory of a class.
@@ -67,12 +69,12 @@ class Manufacturer(object):
 
   ```python
   # Define manufacturer for class A.
-  mftr_a = Manufacturer(A)
-  mftr_a.register('create', A, {'x': float})
+  mfr_a = Manufacturer(A)
+  mfr_a.register('create', A, {'x': float})
 
   # Define manufacturer for class B.
-  mftr_b = Manufacturer(B)
-  mftr_b.register('create', B, {'a': A, 'z': float})
+  mfr_b = Manufacturer(B)
+  mfr_b.register('create', B, {'a': A, 'z': float})
   ```
 
   In order to allow the manufacturers to prepare objects required for the
@@ -83,8 +85,8 @@ class Manufacturer(object):
   broker = Broker()
 
   # Link manufacturers through the broker.
-  broker.register(mftr_a)
-  broker.register(mftr_b)
+  broker.register(mfr_a)
+  broker.register(mfr_b)
   ```
 
   There are two ways the B object can be created:
@@ -96,7 +98,7 @@ class Manufacturer(object):
                     'params': {'x': 37}},
               'z': -41}
 
-    b = mftr_b.make(method='create', params=params)
+    b = mfr_b.make(method='create', params=params)
     ```
 
   2. A call through `Broker.make`. In this way, we need to wrap the `method` and
@@ -123,6 +125,7 @@ class Manufacturer(object):
     self._factories = {}
     self._lock = Lock()
     self._broker = None
+    self._default = None
 
   @property
   def cls(self):
@@ -132,18 +135,30 @@ class Manufacturer(object):
   def cls(self, value):
     raise AttributeError('Output object type of manufacturer is immutable.')
 
+  @property
+  def default(self):
+    return self._default
+
+  @default.setter
+  def default(self, method):
+    errors.validate_is_string(method, 'method')
+    if method not in self._factories:
+      raise ValueError("The method with key `{}` not found.".format(method))
+    self._default = method
+
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
     self._broker = broker
 
-  def register(self, method, factory, sig):
+  def register(self, method, factory, sig, params=None):
     """Register a factory.
 
     Args:
       method: A string key that identifies the factory.
       factory: The factory to be registered.
       sig: The signature of the input parameters. It is a dict mapping each
-           argument of factory to its expected type.
+        argument of factory to its expected type.
+      params: (Optional) Default parameters for this factory.
 
     Raises:
       ValueError:
@@ -151,44 +166,50 @@ class Manufacturer(object):
         2. The parameter keywords of `factory` does not match
                      the keys of `sig`.
         3. `method` is already registered.
-      TypeError: `sig` is not a dict.
+      TypeError:
+        1. `method` is not a string.
+        2. `sig` is not a dict with string keys.
+        3. `params` is not a dict with string keys.
     """
-    if not six.callable(factory):
-      raise ValueError("`factory` must be a callable. Given: {}"
-                       .format(factory))
+    # Check types
+    errors.validate_is_string(method, 'method')
+    errors.validate_is_callable(factory, 'factory')
 
     if not isinstance(sig, dict):
       raise TypeError("`sig` must be a dict mapping factory arguments "
                       "to their corresponding types.")
 
-    required_params, all_params = fn_args(factory)
-    sig_params = set(sig.keys())
-    missing_args = required_params - sig_params
-    if missing_args:
+    params = params or {}
+    errors.validate_kwargs(params, 'params')
+
+    # Check if `sig` contains all required but no invalid arguments.
+    rqd_args, all_args = fn_args(factory)
+    sig_args = set(sig.keys())
+    miss_args = rqd_args - sig_args
+    if miss_args:
       raise ValueError("Missing required arguments from `sig`.\nRequired: {}, "
-                       "Given: {}".format(sorted(required_params),
-                                          sorted(sig_params)))
+                       "Given: {}".format(sorted(rqd_args),
+                                          sorted(sig_args)))
+    errors.validate_args(sig_args, all_args)
+    errors.validate_args(params.keys(), sig_args)
 
-    invalid_args = sig_params - all_params
-    if invalid_args:
-      raise ValueError("Invalid arguments. Expected: {}, Given: {}."
-                       .format(sorted(all_params), sorted(sig_params)))
-
+    # Register factory.
     with self._lock:
       if method in self._factories:
         raise ValueError("The method `{}` is already registered."
                          .format(method))
-      self._factories[method] = (factory, sig)
+      self._factories[method] = {'fn': factory, 'sig': sig, 'params': params}
 
-  def make(self, method, params):
+  def make(self, method=None, params=None):
     """Make object according to specification.
 
     Args:
-      method: String key specifying the factory to call.
-      params: Keyword argument dictionary for the factory. This dictionary can
-              be nested for any parameter that requires an object to be created
-              through another manufacturer. See the class doc string for
-              details.
+      method: String key specifying the factory to call. If `None`, the
+        default factory is used.
+      params: Keyword argument dictionary for the factory. This dictionary
+        can be nested for any parameter that requires an object to be created
+        through another manufacturer. If `None`, the default parameters for
+        the factory is used.
 
     Returns:
       result: An object of intended class of this manufacturer.
@@ -203,22 +224,18 @@ class Manufacturer(object):
         2. Specified factory does not return the intended class object.
     """
     # 0. Sanity checks
+    method = method or self.default
     if method not in self._factories:
       raise ValueError("Unregistered method in manufacturer {}: {}"
                        .format(self.cls, method))
 
-    if not isinstance(params, dict):
-      raise TypeError("`params` must be a dictionary of keyword arguments. "
-                      "Given: {}".format(params))
+    errors.validate_kwargs(params, 'params')
 
     # 1. Get factory and signature
-    fty, sig = self._factories[method]
-    invalid_args = set(params.keys()) - set(sig.keys())
-    if invalid_args:
-      raise ValueError("Invalid arguments. Manufacturer: {}, Method: {}, "
-                       "Expected Arguments: {}, Given: {}."
-                       .format(
-          self.cls, method, sorted(sig.keys()), sorted(params.keys())))
+    fty_spec = self._factories[method]
+    fty, sig = fty_spec['fn'], fty_spec['sig']
+    params = params or fty_spec['params']
+    errors.validate_args(params.keys(), sig.keys())
 
     # 2. Transform arguments
     for k, p in params.items():
@@ -237,7 +254,7 @@ class Manufacturer(object):
     result = fty(**params)
     if not isinstance(result, self.cls):
       raise TypeError("Registered factory with key `{}` does not return a "
-                      "{} object.".format(method, self.cls))
+                      "`{}` object.".format(method, self.cls.__name__))
     return result
 
   def _transform_arg_list(self, method, kwarg, arg_type, params):
