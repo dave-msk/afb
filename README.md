@@ -2,6 +2,12 @@
 
 This package provides a base mechanism of the abstract factory pattern in Python.
 
+## Install
+
+```bash
+$ pip install afb
+```
+
 ## Problem
 
 Basically, when an object of a certain class, say class `A`, is required, other than instantiating it directly through the constructor, it is also possible to define a factory to encapsulate the object creation logic for us. This is useful especially in building execution pipelines, where we may want its behavior to be easily configurable through config files. As the simplest type of config file is text file, it would be best if we can express the config objects for the system by simply a text config file. However, sometimes the constructor or the factory for creating the desired object may depend on another object, which is not easily expressible through text. This package provides a mechanism to easily define the abstract factory for instantiating the object according to the given specification in text.
