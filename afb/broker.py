@@ -48,8 +48,7 @@ class Broker(object):
   ```
   """
 
-  PRIMITIVES = {int, float, bool, str}
-  CONTAINERS = {list, tuple, dict}
+  PRIMITIVES = {int, float, bool, str, list, tuple, dict}
 
   def __init__(self):
     self._manufacturers = {}
@@ -84,9 +83,6 @@ class Broker(object):
 
     if cls in self.PRIMITIVES:
       return cls(params) if params is not None else None
-
-    if cls in self.CONTAINERS:
-      raise TypeError("Multi-level type nesting is not supported.")
 
     mfr = self._manufacturers.get(cls, None)
     if mfr is None:
