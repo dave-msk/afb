@@ -246,7 +246,6 @@ class Manufacturer(object):
 
     #   2.2. Transform arguments
     for k, p in six.iteritems(params):
-      print(p)
       arg_type = sig[k]
       if isinstance(arg_type, list):
         arg = self._transform_arg_list(method, k, arg_type, p)
