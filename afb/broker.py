@@ -48,7 +48,7 @@ class Broker(object):
   ```
   """
 
-  PRIMITIVES = {int, float, bool, str, list, tuple, dict}
+  PRIMITIVES = {bool, float, int, str, tuple, list, dict}
 
   def __init__(self):
     self._manufacturers = {}
@@ -80,6 +80,9 @@ class Broker(object):
     [self.register(mfr) for mfr in checked]
 
   def make(self, cls, params=None):
+
+    if isinstance(params, cls):
+      return params
 
     if cls in self.PRIMITIVES:
       return cls(params) if params is not None else None

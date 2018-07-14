@@ -245,7 +245,8 @@ class Manufacturer(object):
     params.update({k: None for k in rqd_args if k not in params})
 
     #   2.2. Transform arguments
-    for k, p in params.items():
+    for k, p in six.iteritems(params):
+      print(p)
       arg_type = sig[k]
       if isinstance(arg_type, list):
         arg = self._transform_arg_list(method, k, arg_type, p)
@@ -254,12 +255,12 @@ class Manufacturer(object):
       elif isinstance(arg_type, dict):
         arg = self._transform_arg_dict(method, k, arg_type, p)
       else:
-        arg = self._get_from_broker(arg_type, p)
+        arg = self._get_obj(arg_type, p)
       params[k] = arg
 
     # 3. Call factory
     result = fty(**params)
-    if not isinstance(result, self.cls):
+    if result is not None and not isinstance(result, self.cls):
       raise TypeError("Registered factory with key `{}` does not return a "
                       "`{}` object.".format(method, self.cls.__name__))
     return result
@@ -269,7 +270,7 @@ class Manufacturer(object):
       raise ValueError("Only homogeneous lists are allowed. Manufacturer: {}, "
                        "Method: {}, Argument: {}, Given: {}"
                        .format(self.cls, method, kwarg, arg_type))
-    return [self._get_from_broker(arg_type[0], p) for p in params]
+    return [self._get_obj(arg_type[0], p) for p in params]
 
   def _transform_arg_tuple(self, method, kwarg, arg_type, params):
     if len(arg_type) != len(params):
@@ -277,7 +278,7 @@ class Manufacturer(object):
                        "Method: {}, Argument: {}, Expected: {}, Given: {}"
                        .format(
           self.cls, method, kwarg, len(arg_type), len(params)))
-    return tuple([self._get_from_broker(t, p) for t, p in zip(arg_type, params)])
+    return tuple([self._get_obj(t, p) for t, p in zip(arg_type, params)])
 
   def _transform_arg_dict(self, method, kwarg, arg_type, params):
     if len(arg_type) != 1:
@@ -285,16 +286,18 @@ class Manufacturer(object):
                        "are allowed. Manufacturer: {}, Method: {}, "
                        "Argument: {}, Given: {}."
                        .format(self.cls, method, kwarg, arg_type))
-    k_t, v_t = iter(arg_type.items()).__next__()
-    return {self._get_from_broker(k_t, k):
-            self._get_from_broker(v_t, v) for k, v in params.items()}
+    k_t, v_t = iter(six.iteritems(arg_type)).__next__()
+    return {self._get_obj(k_t, k):
+            self._get_obj(v_t, v) for k, v in six.iteritems(params)}
 
-  def _get_from_broker(self, key, params):
-    return self._broker.make(key, params)
+  def _get_obj(self, cls, inputs):
+    if inputs is None or isinstance(inputs, cls):
+      return inputs
+    return self._broker.make(cls, inputs)
 
 
 def fn_args(func):
   sig = inspect.signature(func)
-  required = {k for k, v in sig.parameters.items()
+  required = {k for k, v in six.iteritems(sig.parameters)
               if v.default == inspect.Parameter.empty}
   return required, set(sig.parameters.keys())
