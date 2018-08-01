@@ -82,8 +82,7 @@ There are two ways the B object can be created:
 1. A direct call through `Manufacturer.make`:
 
   ```python
-  params = {'a': {'method': 'create',
-                  'params': {'x': 37}},
+  params = {'a': {'create': {'x': 37}},
             'z': -41}
 
   b = mftr_b.make(method='create', params=params)
@@ -94,10 +93,9 @@ There are two ways the B object can be created:
     required for the broker to choose the right manufacturer.
 
   ```python
-  params = {'method': 'create',  # Factory key w.r.t manufacturer B
-            'params':
-              {'a': {'method': 'create',  # Factory key w.r.t manufacturer A
-                      'params': {'x': 37}},
-                'z': -41}}
+  params = {'create':  # Factory key w.r.t manufacturer B
+            {'a': {'create':  # Factory key w.r.t manufacturer A
+                   {'x': 37}},
+             'z': -41}}
   b = broker(cls=B, params=params)
   ```

@@ -1,3 +1,8 @@
+# Release 1.0
+## Major Features And Improvements
+- Changed input format from `{'method': method, 'params': params}` to `{method: params}`. (i.e., the dictionary now maps directly from method string to its parameters)
+- Added bulk factory registration `register_dict` for manufacturers.
+
 # Release 0.4
 ## Major Features And Improvements
 - Added support for **default factory** for each manufacturer.
