@@ -16,10 +16,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import six
 from threading import Lock
 
 from afb.manufacturer import Manufacturer
-from afb.utils import errors
 
 
 class Broker(object):
@@ -91,7 +91,10 @@ class Broker(object):
     if mfr is None:
       raise KeyError("Unregistered manufacturer for class: {}".format(cls))
 
-    params = params or {}
-    errors.validate_kwargs(params, 'params')
+    params = params or {None: None}
+    if not isinstance(params, dict) or len(params) != 1:
+      raise ValueError("`params` must be either an instance of the target type "
+                       "or a singleton dictionary.")
 
-    return mfr.make(**params)
+    method, params = next(six.iteritems(params))
+    return mfr.make(method=method, params=params)

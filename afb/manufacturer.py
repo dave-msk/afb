@@ -16,7 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from threading import Lock
+from threading import RLock
 
 import inspect
 import six
@@ -43,7 +43,8 @@ class Manufacturer(object):
 
   The arguments of the target factory may require objects other than the
   primitive types (such as `int`, `float`, `bool` and `str`). In such case,
-  a dictionary with the above format is expected for this parameter entry.
+  a singleton dictionary with method name as key and a dictionary of parameters
+  as value, is expected for this parameter entry.
   For example, we have two classes below:
 
   ```python
@@ -94,8 +95,7 @@ class Manufacturer(object):
   1. A direct call through `Manufacturer.make`:
 
     ```python
-    params = {'a': {'method': 'create',
-                    'params': {'x': 37}},
+    params = {'a': {'create': {'x': 37}},
               'z': -41}
 
     b = mfr_b.make(method='create', params=params)
@@ -106,11 +106,10 @@ class Manufacturer(object):
      required for the broker to choose the right manufacturer.
 
     ```python
-    params = {'method': 'create',  # Factory key w.r.t manufacturer B
-              'params':
-                {'a': {'method': 'create',  # Factory key w.r.t manufacturer A
-                       'params': {'x': 37}},
-                 'z': -41}}
+    params = {'create':  # Factory key w.r.t manufacturer B
+              {'a': {'create':  # Factory key w.r.t manufacturer A
+                     {'x': 37}},
+               'z': -41}}
     b = broker(cls=B, params=params)
     ```
   """
@@ -123,7 +122,7 @@ class Manufacturer(object):
     """
     self._cls = cls
     self._factories = {}
-    self._lock = Lock()
+    self._lock = RLock()
     self._broker = None
     self._default = None
 
@@ -141,10 +140,11 @@ class Manufacturer(object):
 
   @default.setter
   def default(self, method):
-    errors.validate_is_string(method, 'method')
-    if method not in self._factories:
-      raise ValueError("The method with key `{}` not found.".format(method))
-    self._default = method
+    with self._lock:
+      errors.validate_is_string(method, 'method')
+      if method not in self._factories:
+        raise ValueError("The method with key `{}` not found.".format(method))
+      self._default = method
 
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
@@ -152,6 +152,8 @@ class Manufacturer(object):
 
   def register(self, method, factory, sig, params=None):
     """Register a factory.
+
+    The factory will also be registered as a default method if none is defined.
 
     Args:
       method: A string key that identifies the factory.
@@ -200,6 +202,74 @@ class Manufacturer(object):
                          .format(method))
       self._factories[method] = {'fn': factory, 'sig': sig,
                                  'rqd_args': rqd_args, 'params': params}
+      if self.default is None:
+        self.default = method
+
+  def register_dict(self, factories_fn_dict):
+    """Registers factories from dictionary.
+
+    This method allows a dictionary of factories to be registered at once.
+    The argument is expected to be a dictionary that maps the method name
+    for the factory to a function that accepts nothing and returns a tuple:
+
+        (factory, signature, (optional) default_params)
+
+    A typical pattern one would encounter is to have a dictionary as a registry
+    to manage a group of factories as "plugin"s, so that whenever a new
+    factory is implemented it can be made available for the manufacturer to
+    call by adding it in the dictionary. For example:
+
+    In `registry.py`:
+    ```python
+    from . import factories as fty
+
+    REGISTRY = {
+      'create': fty.create.get_create,
+      'load': fty.load.get_load
+    }
+    ```
+
+    whereas in `factories/create.py`:
+    ```python
+
+    def create(arg_1, arg_2, arg_3=True):
+      ...
+      return obj
+
+    def get_create():
+      sig = {
+        'arg_1': str,
+        'arg_2': [int],
+        'arg_3': bool
+      }
+      return create, sig, {'arg_1': 'Hello World!', 'arg_2': [1, -1, 0]}
+    ```
+
+    and in `factories/load.py`:
+    ```python
+
+    def load(filename, mode):
+      ...
+      return obj
+
+    def get_load():
+      sig = {
+        'filename': str,
+        'mode': bool
+      }
+      return load, sig  # The default parameter is optional.
+    ```
+
+    The `REGISTRY` can then be passed to its manufacturer for registration.
+
+    Args:
+      factories_fn_dict: A dictionary that maps a method name to a function
+        that accepts no argument and returns a tuple of length 2 or 3:
+
+          (factory, signature, (optional) default_params)
+    """
+    for k, fn in six.iteritems(factories_fn_dict):
+      self.register(k, *fn())
 
   def make(self, method=None, params=None):
     """Make object according to specification.
