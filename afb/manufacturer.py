@@ -317,11 +317,11 @@ class Manufacturer(object):
     #   2.2. Transform arguments
     for k, p in six.iteritems(params):
       arg_type = sig[k]
-      if isinstance(arg_type, list):
+      if isinstance(arg_type, list) and isinstance(p, list):
         arg = self._transform_arg_list(method, k, arg_type, p)
-      elif isinstance(arg_type, tuple):
+      elif isinstance(arg_type, tuple) and isinstance(p, tuple):
         arg = self._transform_arg_tuple(method, k, arg_type, p)
-      elif isinstance(arg_type, dict):
+      elif isinstance(arg_type, dict) and isinstance(p, dict):
         arg = self._transform_arg_dict(method, k, arg_type, p)
       else:
         arg = self._get_obj(arg_type, p)
