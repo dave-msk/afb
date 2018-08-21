@@ -97,5 +97,5 @@ There are two ways the B object can be created:
             {'a': {'create':  # Factory key w.r.t manufacturer A
                    {'x': 37}},
              'z': -41}}
-  b = broker(cls=B, params=params)
+  b = broker.make(cls=B, params=params)
   ```
