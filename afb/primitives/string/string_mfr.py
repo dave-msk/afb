@@ -16,13 +16,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils.misc import create_mfr
+from afb.utils.misc import create_mfr_with_builtin
 from . import factories as fty
 
-_DEFAULT_FTY = {
+_BUILTIN_FTY = {
 }
 
 
 def create_str_mfr():
-  global _DEFAULT_FTY
-  return create_mfr(str, _DEFAULT_FTY)
+  return create_mfr_with_builtin(str, _BUILTIN_FTY)

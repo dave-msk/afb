@@ -25,3 +25,13 @@ def create_mfr(cls, fty_fn_dict):
   for k, fn in six.iteritems(fty_fn_dict):
     mfr.register(k, *fn())
   return mfr
+
+
+def create_mfr_with_builtin(cls, fty_fn_dict):
+  class BuiltinManufacturer(Manufacturer):
+    def _init_builtin(self):
+      super(BuiltinManufacturer, self)._init_builtin()
+      for k, fn in six.iteritems(fty_fn_dict):
+        self._register(k, *fn(), target="builtin")
+
+  return BuiltinManufacturer(cls)

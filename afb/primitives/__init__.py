@@ -7,7 +7,7 @@ from .string import create_str_mfr
 from .tuple import create_tuple_mfr
 
 
-def get_builtin_mfrs():
+def get_primitives_mfrs():
   mfrs = [create_bool_mfr(),
           create_dict_mfr(),
           create_float_mfr(),

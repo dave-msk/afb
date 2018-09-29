@@ -16,10 +16,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from threading import RLock
-
+import copy
 import inspect
 import six
+
+from threading import RLock
 
 from afb.utils import errors
 
@@ -95,8 +96,8 @@ class Manufacturer(object):
   1. A direct call through `Manufacturer.make`:
 
     ```python
-    params = {'a': {'create': {'x': 37}},
-              'z': -41}
+    params = {'a': {'create': {'x': 37.0}},
+              'z': -41.0}
 
     b = mfr_b.make(method='create', params=params)
     ```
@@ -108,8 +109,8 @@ class Manufacturer(object):
     ```python
     params = {'create':  # Factory key w.r.t manufacturer B
               {'a': {'create':  # Factory key w.r.t manufacturer A
-                     {'x': 37}},
-               'z': -41}}
+                     {'x': 37.0}},
+               'z': -41.0}}
     b = broker.make(cls=B, params=params)
     ```
   """
@@ -121,18 +122,17 @@ class Manufacturer(object):
       cls: The intended output class.
     """
     self._cls = cls
-    self._factories = {}
     self._lock = RLock()
     self._broker = None
     self._default = None
 
+    self._builtin = {}
+    self._factories = {}
+    self._init_builtin()
+
   @property
   def cls(self):
     return self._cls
-
-  @cls.setter
-  def cls(self, value):
-    raise AttributeError('Output object type of manufacturer is immutable.')
 
   @property
   def default(self):
@@ -142,9 +142,72 @@ class Manufacturer(object):
   def default(self, method):
     with self._lock:
       errors.validate_is_string(method, 'method')
-      if method not in self._factories:
+      if self._get_factory_spec(method) is None:
         raise ValueError("The method with key `{}` not found.".format(method))
       self._default = method
+
+  @property
+  def factories(self):
+    return copy.deepcopy(self._factories)
+
+  def _init_builtin(self):
+    target = 'builtin'
+    self._register(
+        'from_config', self._from_config, {'config': str}, target=target)
+
+  def _from_config(self, config):
+    params = self._broker.make(dict, {'load_config': {'config': config}})
+    return self._broker.make(self.cls, params)
+
+  def _get_factory_spec(self, key):
+    return self._builtin.get(key) or self._factories.get(key)
+
+  def merge(self, key, manufacturer):
+    """Merge another manufacturer of the same type.
+
+    This method registers all the factories from the given Manufacturer.
+    The resulting key of the merged factories will have the following form:
+
+      * "key/<method_name>"
+
+    This allows convenient grouping of factories by context, without the need
+    to hard-code the path-like key at the time of registration. If `key` is
+    `None`, the original method name is used.
+
+    Args:
+      key: A string that serves as the root of the factories from
+       `manufacturer`. If None, the original method name will be used directly.
+      manufacturer: A manufacturer whose factories are to be merged.
+
+    Raises:
+      KeyError:
+        - Any of the resulting keys has been registered.
+      TypeError:
+        - `manufacturer` is not a `Manufacturer`.
+        - Output class of `manufacturer` is not a subclass of this output class.
+    """
+    if not isinstance(manufacturer, Manufacturer):
+      raise TypeError("`manufacturer` must be a `Manufacturer`. Given: {}"
+                      .format(manufacturer))
+    if not issubclass(manufacturer.cls, self.cls):
+      raise TypeError("The output class of `manufacturer` must be a subclass "
+                      "of {}, given: {}".format(self.cls, manufacturer.cls))
+    factories = manufacturer.factories
+    merged_names = set(_merged_name(key, n) for n in factories)
+    collisions = merged_names.intersection(self._factories)
+    if collisions:
+      raise KeyError("Method key conflicts occurred: {}. Please use another "
+                     "key for merge instead".format(sorted(collisions)))
+    for method, spec in six.iteritems(factories):
+      method = _merged_name(key, method)
+      self.register(method=method,
+                    factory=spec['fn'],
+                    sig=spec['sig'],
+                    params=spec['params'])
+
+  def merge_all(self, mfr_dict):
+    for key, mfr in six.iteritems(mfr_dict):
+      self.merge(key, mfr)
 
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
@@ -152,8 +215,6 @@ class Manufacturer(object):
 
   def register(self, method, factory, sig, params=None):
     """Register a factory.
-
-    The factory will also be registered as a default method if none is defined.
 
     Args:
       method: A string key that identifies the factory.
@@ -173,37 +234,7 @@ class Manufacturer(object):
         2. `sig` is not a dict with string keys.
         3. `params` is not a dict with string keys.
     """
-    # Check types
-    errors.validate_is_string(method, 'method')
-    errors.validate_is_callable(factory, 'factory')
-
-    if not isinstance(sig, dict):
-      raise TypeError("`sig` must be a dict mapping factory arguments "
-                      "to their corresponding types.")
-
-    params = params or {}
-    errors.validate_kwargs(params, 'params')
-
-    # Check if `sig` contains all required but no invalid arguments.
-    rqd_args, all_args = fn_args(factory)
-    sig_args = set(sig.keys())
-    miss_args = rqd_args - sig_args
-    if miss_args:
-      raise ValueError("Missing required arguments from `sig`.\nRequired: {}, "
-                       "Given: {}".format(sorted(rqd_args),
-                                          sorted(sig_args)))
-    errors.validate_args(sig_args, all_args)
-    errors.validate_args(params.keys(), sig_args)
-
-    # Register factory.
-    with self._lock:
-      if method in self._factories:
-        raise ValueError("The method `{}` is already registered."
-                         .format(method))
-      self._factories[method] = {'fn': factory, 'sig': sig,
-                                 'rqd_args': rqd_args, 'params': params}
-      if self.default is None:
-        self.default = method
+    self._register(method, factory, sig, params)
 
   def register_dict(self, factories_fn_dict):
     """Registers factories from dictionary.
@@ -271,6 +302,41 @@ class Manufacturer(object):
     for k, fn in six.iteritems(factories_fn_dict):
       self.register(k, *fn())
 
+  def _register(self, method, factory, sig, params=None, target='factories'):
+
+    # Retrieve registry
+    registry = getattr(self, '_%s' % target, self._factories)
+
+    # Check types
+    errors.validate_is_string(method, 'method')
+    errors.validate_is_callable(factory, 'factory')
+
+    if not isinstance(sig, dict):
+      raise TypeError("`sig` must be a dict mapping factory arguments "
+                      "to their corresponding types.")
+
+    params = params or {}
+    errors.validate_kwargs(params, 'params')
+
+    # Check if `sig` contains all required but no invalid arguments.
+    rqd_args, all_args = fn_args(factory)
+    sig_args = set(sig.keys())
+    miss_args = rqd_args - sig_args
+    if miss_args:
+      raise ValueError("Missing required arguments from `sig`.\nRequired: {}, "
+                       "Given: {}".format(sorted(rqd_args),
+                                          sorted(sig_args)))
+    errors.validate_args(sig_args, all_args)
+    errors.validate_args(params.keys(), sig_args)
+
+    # Register factory.
+    with self._lock:
+      if method in registry:
+        raise ValueError("The method `{}` is already registered."
+                         .format(method))
+      registry[method] = {'fn': factory, 'sig': sig,
+                          'rqd_args': rqd_args, 'params': params}
+
   def make(self, method=None, params=None):
     """Make object according to specification.
 
@@ -296,14 +362,14 @@ class Manufacturer(object):
     """
     # 0. Sanity checks
     method = method or self.default
-    if method not in self._factories:
+    fty_spec = self._get_factory_spec(method)
+    if fty_spec is None:
       raise ValueError("Unregistered method in manufacturer {}: {}"
                        .format(self.cls, method))
 
     errors.validate_kwargs(params, 'params')
 
-    # 1. Get factory and signature
-    fty_spec = self._factories[method]
+    # 1. Retrieve factory and signature
     fty = fty_spec['fn']
     sig = fty_spec['sig']
     rqd_args = fty_spec['rqd_args']
@@ -370,3 +436,8 @@ def fn_args(func):
   required = {k for k, v in six.iteritems(sig.parameters)
               if v.default == inspect.Parameter.empty}
   return required, set(sig.parameters.keys())
+
+
+def _merged_name(key, name):
+  if key is None: return name
+  return "%s/%s" % (key, name)

@@ -20,6 +20,7 @@ import six
 from threading import Lock
 
 from afb.manufacturer import Manufacturer
+from afb.primitives import get_primitives_mfrs
 
 
 class Broker(object):
@@ -48,11 +49,16 @@ class Broker(object):
   ```
   """
 
-  PRIMITIVES = {bool, float, int, str, tuple, list, dict}
-
   def __init__(self):
-    self._manufacturers = {}
     self._lock = Lock()
+
+    # Initialize broker
+    self._manufacturers = {}
+    self._initialize()
+
+  def _initialize(self):
+    # Register manufacturers of the primitives
+    self.register_all(get_primitives_mfrs())
 
   @property
   def classes(self):
@@ -60,6 +66,49 @@ class Broker(object):
 
   def get_manufacturer(self, cls):
     return self._manufacturers.get(cls)
+
+  def merge(self, key, manufacturer):
+    """Merge `Manufacturer` with the same output class.
+
+    This method merges the factories in the given Manufacturer to the registered
+    one. The method key of the newly added factories will have the form:
+
+      * "key/<method_name>"
+
+    See docstring of `Manufacturer.merge` for more details.
+
+    Args:
+      key: A string that serves as the root of the factories from
+       `manufacturer`. If None, the original method name will be used directly.
+      manufacturer: A manufacturer whose factories are to be merged.
+
+    Raises:
+      KeyError:
+        - Any of the resulting keys has been registered.
+      TypeError:
+        - `manufacturer` is not a `Manufacturer`.
+      ValueError:
+        - `Manufacturer` with output class of the given one is not registered.
+    """
+    if not isinstance(manufacturer, Manufacturer):
+      raise TypeError("`manufacturer` must be a `Manufacturer`. Given: {}"
+                      .format(manufacturer))
+    mfr = self.get_manufacturer(manufacturer.cls)
+    if mfr is None:
+      raise ValueError("Manufacturer with output class {} is not registered."
+                       .format(manufacturer.cls))
+    mfr.merge(key=key, manufacturer=manufacturer)
+
+  def merge_all(self, manufacturers_dict):
+    """Merge multiple manufacturers.
+
+    Args:
+      manufacturers_dict: A dictionary mapping a key to an iterable of
+        `Manufacturers` to be merged. The key will be used across the iterable.
+    """
+    for key, mfrs in six.iteritems(manufacturers_dict):
+      for mfr in mfrs:
+        self.merge(key, mfr)
 
   def register(self, manufacturer):
     if not isinstance(manufacturer, Manufacturer):
@@ -83,9 +132,6 @@ class Broker(object):
 
     if isinstance(params, cls):
       return params
-
-    if cls in self.PRIMITIVES:
-      return cls(params) if params is not None else None
 
     mfr = self._manufacturers.get(cls, None)
     if mfr is None:
