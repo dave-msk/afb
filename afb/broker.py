@@ -139,8 +139,8 @@ class Broker(object):
 
     params = params or {None: None}
     if not isinstance(params, dict) or len(params) != 1:
-      raise ValueError("`params` must be either an instance of the target type "
-                       "or a singleton dictionary.")
+      raise TypeError("`params` must be either an instance of the target type "
+                      "or a singleton dictionary.")
 
     method, params = next(six.iteritems(params))
     return mfr.make(method=method, params=params)
