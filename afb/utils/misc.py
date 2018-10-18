@@ -20,18 +20,24 @@ import six
 from afb.manufacturer import Manufacturer
 
 
-def create_mfr(cls, fty_fn_dict):
+def create_mfr(cls, fty_fn_dict, keyword_mode=False):
   mfr = Manufacturer(cls)
   for k, fn in six.iteritems(fty_fn_dict):
-    mfr.register(k, *fn())
+    if keyword_mode:
+      mfr.register(k, **fn())
+    else:
+      mfr.register(k, *fn())
   return mfr
 
 
-def create_mfr_with_builtin(cls, fty_fn_dict):
+def create_mfr_with_builtin(cls, fty_fn_dict, keyword_mode=False):
   class BuiltinManufacturer(Manufacturer):
     def _init_builtin(self):
       super(BuiltinManufacturer, self)._init_builtin()
       for k, fn in six.iteritems(fty_fn_dict):
-        self._register(k, *fn(), target="builtin")
+        if keyword_mode:
+          self._register(k, **fn(), target="builtin")
+        else:
+          self._register(k, *fn(), target="builtin")
 
   return BuiltinManufacturer(cls)

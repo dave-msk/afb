@@ -18,11 +18,22 @@ from __future__ import print_function
 
 import copy
 import inspect
+import os
 import six
 
 from threading import RLock
 
 from afb.utils import errors
+
+
+_TYPE_CHECKS = [
+    lambda t: isinstance(t, type),
+    lambda t: isinstance(t, list) and len(t) == 1 and isinstance(t[0], type),
+    lambda t: isinstance(t, tuple) and all(isinstance(e, type) for e in t),
+    lambda t: (isinstance(t, dict) and len(t) == 1 and
+               all(isinstance(k, type) and
+                   isinstance(v, t) for k, v in six.iteritems(t)))
+]
 
 
 class Manufacturer(object):
@@ -213,7 +224,12 @@ class Manufacturer(object):
     """This is intended to be called by the broker in registration."""
     self._broker = broker
 
-  def register(self, method, factory, sig, params=None):
+  def register(self,
+               method,
+               factory,
+               sig,
+               params=None,
+               descriptions=None):
     """Register a factory.
 
     Args:
@@ -222,6 +238,9 @@ class Manufacturer(object):
       sig: The signature of the input parameters. It is a dict mapping each
         argument of factory to its expected type.
       params: (Optional) Default parameters for this factory.
+      descriptions: (Optional) Descriptions of this factory. If provided, it
+      must specifies the short description keyed by "short". A long description
+      keyed by "long" can optionally be included.
 
     Raises:
       ValueError:
@@ -229,21 +248,36 @@ class Manufacturer(object):
         2. The parameter keywords of `factory` does not match
                      the keys of `sig`.
         3. `method` is already registered.
+        4. `descriptions` is not a `dict` with short description specified.
+        5. `descriptions` contains any keys not from `("short", "long")`.
       TypeError:
         1. `method` is not a string.
         2. `sig` is not a dict with string keys.
         3. `params` is not a dict with string keys.
+        4. `descriptions` contains non-string values.
     """
-    self._register(method, factory, sig, params)
+    self._register(method,
+                   factory,
+                   sig,
+                   params=params,
+                   descriptions=descriptions)
 
-  def register_dict(self, factories_fn_dict):
+  def register_dict(self, factories_fn_dict, keyword_mode=False):
     """Registers factories from dictionary.
 
     This method allows a dictionary of factories to be registered at once.
     The argument is expected to be a dictionary that maps the method name
-    for the factory to a function that accepts nothing and returns a tuple:
+    for the factory to a function that accepts nothing and returns either
+    a tuple in non-keyword mode:
 
-        (factory, signature, (optional) default_params)
+        (factory, signature, default_params (optional), descriptions (optional))
+
+    Or a dictionary in keyword mode:
+
+        {"factory": factory,            # required
+         "sig": signature,              # required
+         "params": default_params,      # optional
+         "descriptions": descriptions}  # optional
 
     A typical pattern one would encounter is to have a dictionary as a registry
     to manage a group of factories as "plugin"s, so that whenever a new
@@ -295,14 +329,35 @@ class Manufacturer(object):
 
     Args:
       factories_fn_dict: A dictionary that maps a method name to a function
-        that accepts no argument and returns a tuple of length 2 or 3:
+        that accepts no argument and returns:
 
-          (factory, signature, (optional) default_params)
+        * Non-keyword mode - A tuple:
+
+          (factory, signature, default_params (opt), descriptions (opt))
+
+        * Keyword mode - A dictionary:
+
+          {"factory": factory,            # required
+           "sig": signature,              # required
+           "params": default_params,      # optional
+           "descriptions": descriptions}  # optional
+
+      keyword_mode: Boolean. Indicates the mode in which to perform factory
+        registrations. See above.
     """
     for k, fn in six.iteritems(factories_fn_dict):
-      self.register(k, *fn())
+      if keyword_mode:
+        self.register(k, **fn())
+      else:
+        self.register(k, *fn())
 
-  def _register(self, method, factory, sig, params=None, target='factories'):
+  def _register(self,
+                method,
+                factory,
+                sig,
+                params=None,
+                descriptions=None,
+                target='factories'):
 
     # Retrieve registry
     registry = getattr(self, '_%s' % target, self._factories)
@@ -317,6 +372,8 @@ class Manufacturer(object):
 
     params = params or {}
     errors.validate_kwargs(params, 'params')
+    descriptions = _normalized_factory_descriptions(descriptions)
+    sig = _parse_signature(sig)
 
     # Check if `sig` contains all required but no invalid arguments.
     rqd_args, all_args = fn_args(factory)
@@ -334,8 +391,11 @@ class Manufacturer(object):
       if method in registry:
         raise ValueError("The method `{}` is already registered."
                          .format(method))
-      registry[method] = {'fn': factory, 'sig': sig,
-                          'rqd_args': rqd_args, 'params': params}
+      registry[method] = {'fn': factory,
+                          'sig': sig,
+                          'rqd_args': rqd_args,
+                          'params': params,
+                          'descriptions': descriptions}
 
   def make(self, method=None, params=None):
     """Make object according to specification.
@@ -382,7 +442,7 @@ class Manufacturer(object):
 
     #   2.2. Transform arguments
     for k, p in six.iteritems(params):
-      arg_type = sig[k]
+      arg_type = sig[k]['type']
       if isinstance(arg_type, list) and isinstance(p, list):
         arg = self._transform_arg_list(method, k, arg_type, p)
       elif isinstance(arg_type, tuple) and isinstance(p, tuple):
@@ -439,5 +499,50 @@ def fn_args(func):
 
 
 def _merged_name(key, name):
-  if key is None: return name
-  return "%s/%s" % (key, name)
+  key = key or ""
+  return os.path.join(key, name)
+
+
+def _parse_signature(sig):
+  parsed = {}
+  for k, v in six.iteritems(sig):
+    v = _normalized_signature_entry(v)
+    parsed[k] = v
+  return parsed
+
+
+def _is_valid_type(t):
+  return any(check(t) for check in _TYPE_CHECKS)
+
+
+def _normalized_signature_entry(v):
+  valid_keys = {"type", "description"}
+  if _is_valid_type(v):
+    return {"type": v, "description": ""}
+  elif (isinstance(v, dict) and
+        _is_valid_type(v.get("type")) and
+        not (valid_keys - set(six.iterkeys(v)))):
+    return {"type": v["type"], "description": v.get("description", "")}
+
+  raise ValueError("The value of an entry of the signature dictionary must "
+                   "either be a type specification, or a `dict` "
+                   "of length at most 2, with the type specification keyed by "
+                   "\"type\", and optionally a description in `str` of the "
+                   "argument keyed by \"description\".")
+
+
+def _normalized_factory_descriptions(desc):
+  valid_keys = {"short", "long"}
+  desc = desc or {"short": ""}
+  if (not isinstance(desc, dict) or
+      "short" not in desc or
+      not (valid_keys - set(six.iterkeys(desc)))):
+    raise ValueError("The factory description must either be `None` or a `dict`"
+                     " with the short description keyed as by \"short\" "
+                     "included. A long description keyed by \"long\" can be "
+                     "optionally provided.")
+  short = desc["short"]
+  long = desc.get("long", "")
+  if not isinstance(short, str) or not isinstance(long, str):
+    raise TypeError("The descriptions must be strings. Given: {}".format(desc))
+  return {"short": short, "long": long}
