@@ -22,11 +22,7 @@ from afb.manufacturer import Manufacturer
 
 def create_mfr(cls, fty_fn_dict, keyword_mode=False):
   mfr = Manufacturer(cls)
-  for k, fn in six.iteritems(fty_fn_dict):
-    if keyword_mode:
-      mfr.register(k, **fn())
-    else:
-      mfr.register(k, *fn())
+  mfr.register_dict(fty_fn_dict, keyword_mode=keyword_mode)
   return mfr
 
 

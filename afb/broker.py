@@ -16,11 +16,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import os
 import six
 from threading import Lock
 
 from afb.manufacturer import Manufacturer
 from afb.primitives import get_primitives_mfrs
+from afb.utils import docs
 
 
 class Broker(object):
@@ -144,3 +146,23 @@ class Broker(object):
 
     method, params = next(six.iteritems(params))
     return mfr.make(method=method, params=params)
+
+  def export_markdown(self,
+                      export_dir,
+                      cls_dir_fn=None,
+                      cls_desc_name="description"):
+
+    def default_cls_dir_fn(cls):
+      return "%s.%s" % (cls.__module__, cls.__qualname__)
+
+    cls_dir_fn = cls_dir_fn or default_cls_dir_fn
+
+    def factory_doc_path_fn(key):
+      return os.path.join("factories", "%s.md" % key)
+
+    for cls in self.classes:
+      mfr = self.get_manufacturer(cls)
+      docs.export_class_markdown(
+          mfr, export_dir, cls_dir_fn, cls_desc_name, factory_doc_path_fn)
+      docs.export_factories_markdown(
+          mfr, export_dir, cls_dir_fn, cls_desc_name, factory_doc_path_fn)

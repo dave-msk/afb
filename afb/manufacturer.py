@@ -16,6 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import copy
 import inspect
 import os
@@ -61,8 +62,8 @@ class Manufacturer(object):
 
   ```python
   class A(object):
-    def __init__(self, x):
-      self._x = x
+    def __init__(self, u):
+      self._x = u
 
     @property
     def value(self):
@@ -83,7 +84,7 @@ class Manufacturer(object):
   ```python
   # Define manufacturer for class A.
   mfr_a = Manufacturer(A)
-  mfr_a.register('create', A, {'x': float})
+  mfr_a.register('create', A, {'u': float})
 
   # Define manufacturer for class B.
   mfr_b = Manufacturer(B)
@@ -107,7 +108,7 @@ class Manufacturer(object):
   1. A direct call through `Manufacturer.make`:
 
     ```python
-    params = {'a': {'create': {'x': 37.0}},
+    params = {'a': {'create': {'u': 37.0}},
               'z': -41.0}
 
     b = mfr_b.make(method='create', params=params)
@@ -120,7 +121,7 @@ class Manufacturer(object):
     ```python
     params = {'create':  # Factory key w.r.t manufacturer B
               {'a': {'create':  # Factory key w.r.t manufacturer A
-                     {'x': 37.0}},
+                     {'u': 37.0}},
                'z': -41.0}}
     b = broker.make(cls=B, params=params)
     ```
@@ -536,11 +537,11 @@ def _normalized_factory_descriptions(desc):
   desc = desc or {"short": ""}
   if (not isinstance(desc, dict) or
       "short" not in desc or
-      not (valid_keys - set(six.iterkeys(desc)))):
+      (set(six.iterkeys(desc)) - valid_keys)):
     raise ValueError("The factory description must either be `None` or a `dict`"
                      " with the short description keyed as by \"short\" "
                      "included. A long description keyed by \"long\" can be "
-                     "optionally provided.")
+                     "optionally provided. Given: {}".format(desc))
   short = desc["short"]
   long = desc.get("long", "")
   if not isinstance(short, str) or not isinstance(long, str):
