@@ -16,7 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import collections
 import copy
 import inspect
 import os
@@ -33,7 +32,7 @@ _TYPE_CHECKS = [
     lambda t: isinstance(t, tuple) and all(isinstance(e, type) for e in t),
     lambda t: (isinstance(t, dict) and len(t) == 1 and
                all(isinstance(k, type) and
-                   isinstance(v, t) for k, v in six.iteritems(t)))
+                   isinstance(v, type) for k, v in six.iteritems(t)))
 ]
 
 

@@ -58,17 +58,16 @@ def export_factories_markdown(mfr,
 
     factory_doc_path_rel = os.path.join(cls_dir, factory_doc_path_fn(k))
     depth = len(factory_doc_path_rel.split('/')) - 1
+    doc_root_rel = '/'.join([".."] * depth)
 
     def format_arg_list_entry(arg, arg_sig, optional):
       arg_line = "- %s`%s`:" % ("(optional) " if optional else "", arg)
       arg_type = arg_sig["type"]
-      arg_type_desc_path = os.path.join('/'.join([".."] * depth),
-                                        cls_dir_fn(arg_type),
-                                        "%s.md" % cls_desc_name)
-      type_line = "  - Type: [`%s`](%s)" % (arg_type.__qualname__,
-                                            arg_type_desc_path)
-      full_type_line = "  - Full Type: `%s.%s`" % (arg_type.__module__,
-                                                   arg_type.__qualname__)
+      type_line = make_type_line(
+          arg_type, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=False)
+      full_type_line = make_type_line(
+          arg_type, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=True)
+
       desc_line = "  - Description: %s" % arg_sig["description"]
       return "\n".join((arg_line, type_line, full_type_line, desc_line))
 
@@ -89,6 +88,32 @@ def export_factories_markdown(mfr,
     make_dir(factory_doc_path)
     with open(factory_doc_path, 'w') as f:
       f.write(factory_doc)
+
+
+def make_type_line(arg_type, root, cls_dir_fn, cls_desc_name, full_type=False):
+  prefix = "  - %sType: " % ("Full " if full_type else "")
+
+  def get_type_entity(arg_type):
+    path = os.path.join(root, cls_dir_fn(arg_type), "%s.md" % cls_desc_name)
+    name = arg_type.__qualname__
+    if full_type:
+      name = "%s.%s" % (arg_type.__module__, name)
+    return "[`%s`](%s)" % (name, path)
+
+  if isinstance(arg_type, type):
+    body = get_type_entity(arg_type)
+  elif isinstance(arg_type, list):
+    arg_type = arg_type[0]
+    body = "[%s]" % get_type_entity(arg_type)
+  elif isinstance(arg_type, tuple):
+    body = "(%s)" % ", ".join(get_type_entity(t) for t in arg_type)
+  elif isinstance(arg_type, dict):
+    kt, vt = iter(six.iteritems(arg_type)).__next__()
+    body = "{%s: %s}" % (get_type_entity(kt), get_type_entity(vt))
+  else:
+    raise TypeError("Unknown type: {}".format(arg_type))
+
+  return "%s%s" % (prefix, body)
 
 
 def make_dir(path):
