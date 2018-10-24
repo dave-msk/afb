@@ -214,7 +214,8 @@ class Manufacturer(object):
       self.register(method=method,
                     factory=spec['fn'],
                     sig=spec['sig'],
-                    params=spec['params'])
+                    params=spec['params'],
+                    descriptions=spec["descriptions"])
 
   def merge_all(self, mfr_dict):
     for key, mfr in six.iteritems(mfr_dict):

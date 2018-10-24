@@ -50,8 +50,8 @@ def export_factories_markdown(mfr,
   for k, entry in six.iteritems(mfr.factories):
     title = "# %s - `%s`" % (cls_name, k)
 
-    short = entry["descriptions"]["short"]
-    long = entry["descriptions"]["long"]
+    short = inspect.cleandoc(entry["descriptions"]["short"])
+    long = inspect.cleandoc(entry["descriptions"]["long"])
     description = "## Description\n\n**%s**" % short
     if long:
       description = "%s\n\n%s" % (description, long)
@@ -77,6 +77,8 @@ def export_factories_markdown(mfr,
     parameters = inspect.signature(fn).parameters
     arg_doc_list = []
     for p in parameters:
+      if p not in sig:
+        continue
       arg_sig = sig[p]
       optional = p not in rqd_args
       arg_doc_list.append(format_arg_list_entry(p, arg_sig, optional))
