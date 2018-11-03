@@ -244,5 +244,3 @@ The execution goes as follows:
 
 **Note:** The above is only for illustration purpose. In real applications, the specifications are usually loaded from configuration files, and the classes and factories are defined in dedicated packages and modules with a registry for management.
 
-## Code Management
-
