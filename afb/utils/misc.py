@@ -32,7 +32,8 @@ def create_mfr_with_builtin(cls, fty_fn_dict, keyword_mode=False):
       super(BuiltinManufacturer, self)._init_builtin()
       for k, fn in six.iteritems(fty_fn_dict):
         if keyword_mode:
-          self._register(k, **fn(), target="builtin")
+          kwargs = dict(fn(), target="builtin")
+          self._register(k, **kwargs)
         else:
           self._register(k, *fn(), target="builtin")
 

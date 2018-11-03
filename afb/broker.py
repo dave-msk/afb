@@ -69,11 +69,12 @@ class Broker(object):
   def get_manufacturer(self, cls):
     return self._manufacturers.get(cls)
 
-  def merge(self, key, manufacturer):
+  def merge(self, key, mfr):
     """Merge `Manufacturer` with the same output class.
 
-    This method merges the factories in the given Manufacturer to the registered
-    one. The method key of the newly added factories will have the form:
+    This method merges the factories in the given `Manufacturer` to the
+    registered one. The method key of the newly added factories will have
+    the form:
 
       * "key/<method_name>"
 
@@ -81,50 +82,51 @@ class Broker(object):
 
     Args:
       key: A string that serves as the root of the factories from
-       `manufacturer`. If None, the original method name will be used directly.
-      manufacturer: A manufacturer whose factories are to be merged.
+       `mfr`. If None, the original method name will be used directly.
+      mfr: A manufacturer whose factories are to be merged.
 
     Raises:
       KeyError:
         - Any of the resulting keys has been registered.
       TypeError:
-        - `manufacturer` is not a `Manufacturer`.
+        - `mfr` is not a `Manufacturer`.
       ValueError:
         - `Manufacturer` with output class of the given one is not registered.
     """
-    if not isinstance(manufacturer, Manufacturer):
-      raise TypeError("`manufacturer` must be a `Manufacturer`. Given: {}"
-                      .format(manufacturer))
-    mfr = self.get_manufacturer(manufacturer.cls)
+    if not isinstance(mfr, Manufacturer):
+      raise TypeError("`mfr` must be a `Manufacturer`. Given: {}"
+                      .format(mfr))
+    mfr = self.get_manufacturer(mfr.cls)
     if mfr is None:
       raise ValueError("Manufacturer with output class {} is not registered."
-                       .format(manufacturer.cls))
-    mfr.merge(key=key, manufacturer=manufacturer)
+                       .format(mfr.cls))
+    mfr.merge(key=key, mfr=mfr)
 
-  def merge_all(self, manufacturers_dict):
-    """Merge multiple manufacturers.
+  def merge_all(self, mfrs_dict):
+    """Merge multiple manufacturers for each key.
 
     Args:
-      manufacturers_dict: A dictionary mapping a key to an iterable of
-        `Manufacturers` to be merged. The key will be used across the iterable.
+      mfrs_dict: A dictionary mapping a key to an iterable of
+        `Manufacturer`s, or functions each accepts nothing and returns one,
+         to be merged. The key will be used across the iterable.
     """
-    for key, mfrs in six.iteritems(manufacturers_dict):
+    for key, mfrs in six.iteritems(mfrs_dict):
       for mfr in mfrs:
         self.merge(key, mfr)
 
-  def register(self, manufacturer):
-    if not isinstance(manufacturer, Manufacturer):
+  def register(self, mfr):
+    if not isinstance(mfr, Manufacturer):
       raise TypeError("Only Manufacturer is allowed for registration.")
-    cls = manufacturer.cls
+    cls = mfr.cls
     with self._lock:
       if cls in self._manufacturers:
         raise ValueError("The class `{}` is already registered.".format(cls))
-      manufacturer.set_broker(self)
-      self._manufacturers[cls] = manufacturer
+      mfr.set_broker(self)
+      self._manufacturers[cls] = mfr
 
-  def register_all(self, manufacturers):
+  def register_all(self, mfrs):
     checked = []
-    for mfr in manufacturers:
+    for mfr in mfrs:
       if not isinstance(mfr, Manufacturer):
         raise TypeError("Only Manufacturer is allowed for registration.")
       checked.append(mfr)
@@ -147,6 +149,7 @@ class Broker(object):
     method, params = next(six.iteritems(params))
     return mfr.make(method=method, params=params)
 
+  # TODO: Export documentations for builtin factories
   def export_markdown(self,
                       export_dir,
                       cls_dir_fn=None,

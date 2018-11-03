@@ -20,6 +20,7 @@ import copy
 import inspect
 import os
 import six
+import sys
 
 from threading import RLock
 
@@ -166,6 +167,7 @@ class Manufacturer(object):
     self._register(
         'from_config', self._from_config, {'config': str}, target=target)
 
+  # TODO: Add documentations
   def _from_config(self, config):
     params = self._broker.make(dict, {'load_config': {'config': config}})
     return self._broker.make(self.cls, params)
@@ -173,7 +175,7 @@ class Manufacturer(object):
   def _get_factory_spec(self, key):
     return self._builtin.get(key) or self._factories.get(key)
 
-  def merge(self, key, manufacturer):
+  def merge(self, key, mfr):
     """Merge another manufacturer of the same type.
 
     This method registers all the factories from the given Manufacturer.
@@ -186,29 +188,53 @@ class Manufacturer(object):
     `None`, the original method name is used.
 
     Args:
-      key: A string that serves as the root of the factories from
-       `manufacturer`. If None, the original method name will be used directly.
-      manufacturer: A manufacturer whose factories are to be merged.
+      key: A string that serves as the root of the factories from `mfr`.
+        If empty, the original method name will be used directly.
+      mfr: `Manufacturer` or a function that accepts nothing and returns it.
 
     Raises:
       KeyError:
         - Any of the resulting keys has been registered.
       TypeError:
-        - `manufacturer` is not a `Manufacturer`.
-        - Output class of `manufacturer` is not a subclass of this output class.
+        - `mfr` is not a `Manufacturer` nor a function that accepts nothing
+            and returns it.
+        - Output class of `mfr` is not a subclass of this output class.
     """
-    if not isinstance(manufacturer, Manufacturer):
-      raise TypeError("`manufacturer` must be a `Manufacturer`. Given: {}"
-                      .format(manufacturer))
-    if not issubclass(manufacturer.cls, self.cls):
-      raise TypeError("The output class of `manufacturer` must be a subclass "
-                      "of {}, given: {}".format(self.cls, manufacturer.cls))
-    factories = manufacturer.factories
-    merged_names = set(_merged_name(key, n) for n in factories)
-    collisions = merged_names.intersection(self._factories)
-    if collisions:
-      raise KeyError("Method key conflicts occurred: {}. Please use another "
-                     "key for merge instead".format(sorted(collisions)))
+    mfr = _maybe_get_mfr(mfr)
+    if mfr is None:
+      self._raise_error(TypeError,
+                        "\"mfr\" must be either a `Manufacturer` or a "
+                        "function that accepts nothing and returns it. "
+                        "Given: {}".format(mfr))
+    self._validate_merge_request(key, mfr)
+    self._merge(key, mfr)
+
+  def merge_all(self, mfr_dict):
+    """Merges multiple manufacturers.
+
+    Args:
+      mfr_dict: A dictionary mapping keys to `Manufacturer`s or functions where
+        each accepts nothing and returns a `Manufacturer`.
+
+    Raises:
+      KeyError:
+        - Any of the resulting keys has been registered.
+      TypeError:
+        - `mfr` is not a `Manufacturer` nor a function that accepts nothing and
+            returns it.
+        - Output class of `mfr` is not a subclass of this output class.
+    """
+    mfr_dict_validated = {}
+    for key, mfr in six.iteritems(mfr_dict):
+      mfr = _maybe_get_mfr(mfr)
+      self._validate_merge_request(key, mfr)
+      mfr_dict_validated[key] = mfr
+
+    for key, mfr in six.iteritems(mfr_dict_validated):
+      self._merge(key, mfr)
+
+  def _merge(self, key, mfr):
+    factories = mfr.factories
     for method, spec in six.iteritems(factories):
       method = _merged_name(key, method)
       self.register(method=method,
@@ -216,10 +242,6 @@ class Manufacturer(object):
                     sig=spec['sig'],
                     params=spec['params'],
                     descriptions=spec["descriptions"])
-
-  def merge_all(self, mfr_dict):
-    for key, mfr in six.iteritems(mfr_dict):
-      self.merge(key, mfr)
 
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
@@ -368,30 +390,38 @@ class Manufacturer(object):
     errors.validate_is_callable(factory, 'factory')
 
     if not isinstance(sig, dict):
-      raise TypeError("`sig` must be a dict mapping factory arguments "
-                      "to their corresponding types.")
+      raise self._raise_error(TypeError,
+                              "`sig` must be a dict mapping factory arguments "
+                              "to their corresponding types.")
 
     params = params or {}
     errors.validate_kwargs(params, 'params')
-    descriptions = _normalized_factory_descriptions(descriptions)
-    sig = _parse_signature(sig)
+
+    try:
+      descriptions = _normalized_factory_descriptions(descriptions)
+      sig = _parse_signature(sig)
+    except:
+      e = sys.exc_info()
+      self._raise_error(e[0], str(e[1]))
 
     # Check if `sig` contains all required but no invalid arguments.
     rqd_args, all_args = fn_args(factory)
     sig_args = set(sig.keys())
     miss_args = rqd_args - sig_args
     if miss_args:
-      raise ValueError("Missing required arguments from `sig`.\nRequired: {}, "
-                       "Given: {}".format(sorted(rqd_args),
-                                          sorted(sig_args)))
+      raise self._raise_error(ValueError,
+                              "Missing required arguments from `sig`."
+                              "\nRequired: {}, Given: {}"
+                              .format(sorted(rqd_args), sorted(sig_args)))
     errors.validate_args(sig_args, all_args)
     errors.validate_args(params.keys(), sig_args)
 
     # Register factory.
     with self._lock:
       if method in registry:
-        raise ValueError("The method `{}` is already registered."
-                         .format(method))
+        raise self._raise_error(ValueError,
+                                "The method `{}` is already registered."
+                                .format(method))
       registry[method] = {'fn': factory,
                           'sig': sig,
                           'rqd_args': rqd_args,
@@ -425,8 +455,9 @@ class Manufacturer(object):
     method = method or self.default
     fty_spec = self._get_factory_spec(method)
     if fty_spec is None:
-      raise ValueError("Unregistered method in manufacturer {}: {}"
-                       .format(self.cls, method))
+      raise self._raise_error(ValueError,
+                              "Unregistered method in manufacturer {}: {}"
+                              .format(self.cls, method))
 
     errors.validate_kwargs(params, 'params')
 
@@ -457,31 +488,36 @@ class Manufacturer(object):
     # 3. Call factory
     result = fty(**params)
     if result is not None and not isinstance(result, self.cls):
-      raise TypeError("Registered factory with key `{}` does not return a "
-                      "`{}` object.".format(method, self.cls.__name__))
+      raise self._raise_error(TypeError,
+                              "Registered factory with key `{}` does not "
+                              "return a `{}` object."
+                              .format(method, self.cls.__name__))
     return result
 
   def _transform_arg_list(self, method, kwarg, arg_type, params):
     if len(arg_type) != 1:
-      raise ValueError("Only homogeneous lists are allowed. Manufacturer: {}, "
-                       "Method: {}, Argument: {}, Given: {}"
-                       .format(self.cls, method, kwarg, arg_type))
+      raise self._raise_error(ValueError,
+                              "Only homogeneous lists are allowed. "
+                              "Method: {}, Argument: {}, Given: {}"
+                              .format(self.cls, method, kwarg, arg_type))
     return [self._get_obj(arg_type[0], p) for p in params]
 
   def _transform_arg_tuple(self, method, kwarg, arg_type, params):
     if len(arg_type) != len(params):
-      raise ValueError("Tuple argument length mismatch. Manufacturer: {}, "
-                       "Method: {}, Argument: {}, Expected: {}, Given: {}"
-                       .format(
-          self.cls, method, kwarg, len(arg_type), len(params)))
+      raise self._raise_error(
+          ValueError,
+          "Tuple argument length mismatch. "
+          "Method: {}, Argument: {}, Expected: {}, Given: {}"
+          .format(method, kwarg, len(arg_type), len(params)))
     return tuple([self._get_obj(t, p) for t, p in zip(arg_type, params)])
 
   def _transform_arg_dict(self, method, kwarg, arg_type, params):
     if len(arg_type) != 1:
-      raise ValueError("Only dictionaries with homogeneous keys and values "
-                       "are allowed. Manufacturer: {}, Method: {}, "
-                       "Argument: {}, Given: {}."
-                       .format(self.cls, method, kwarg, arg_type))
+      raise self._raise_error(
+          ValueError,
+          "Only dictionaries with homogeneous keys and values are allowed. "
+          "Method: {}, Argument: {}, Given: {}."
+          .format(self.cls, method, kwarg, arg_type))
     k_t, v_t = iter(six.iteritems(arg_type)).__next__()
     return {self._get_obj(k_t, k):
             self._get_obj(v_t, v) for k, v in six.iteritems(params)}
@@ -490,6 +526,33 @@ class Manufacturer(object):
     if inputs is None or isinstance(inputs, cls):
       return inputs
     return self._broker.make(cls, inputs)
+
+  def _validate_merge_request(self, key, mfr):
+    if not isinstance(key, str):
+      raise self._raise_error(TypeError,
+                              "`key` must be a `str`. Given: {}".format(key))
+
+    if not isinstance(mfr, Manufacturer):
+      raise self._raise_error(TypeError,
+                              "`mfr` must be a `Manufacturer`. Given: {}"
+                              .format(mfr))
+    if not issubclass(mfr.cls, self.cls):
+      raise self._raise_error(TypeError,
+                              "The output class of `mfr` must be a subclass of "
+                              "{}, given: {}".format(self.cls, mfr.cls))
+    factories = mfr.factories
+    merged_names = set(_merged_name(key, n) for n in factories)
+    collisions = merged_names.intersection(self._factories)
+    if collisions:
+      raise self._raise_error(KeyError,
+                              "Method key conflicts occurred: {}. "
+                              "Please use another key for merge instead"
+                              .format(sorted(collisions)))
+
+  def _raise_error(self, err_type, message):
+    message = ("Raised from \"Manufacturer\" of class {}: {}"
+               .format(self.cls.__name__, message))
+    raise err_type(message)
 
 
 def fn_args(func):
@@ -547,3 +610,20 @@ def _normalized_factory_descriptions(desc):
   if not isinstance(short, str) or not isinstance(long, str):
     raise TypeError("The descriptions must be strings. Given: {}".format(desc))
   return {"short": short, "long": long}
+
+
+def _maybe_get_mfr(maybe_mfr):
+  mfr = None
+  if isinstance(maybe_mfr, Manufacturer):
+    mfr = maybe_mfr
+  elif six.callable(maybe_mfr):
+    try:
+      mfr = maybe_mfr()
+    except TypeError:
+      pass
+
+  if isinstance(mfr, Manufacturer):
+    return mfr
+
+  raise TypeError("A `Manufacturer` or a function that accepts nothing and "
+                  "returns one is expected. Given: {}".format(maybe_mfr))

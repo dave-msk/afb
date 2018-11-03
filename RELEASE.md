@@ -1,3 +1,14 @@
+# Release 1.2
+## Major Features And Improvements
+- Added indicator of which `Manufacturer` has raised exception for easier debugging.
+- The argument `mfr` now accepts callable that takes no argument and returns a `Manufacturer`, other then a direct `Manufacturer` object for lazy evaluation.
+
+## Breaking Changes
+- All occurrances of the keyword argument `manufacturer` has been changed to `mfr`.
+
+## Bug Fixes and Other Changes
+- `Manufacturer.merge_all` will now check if there is any key collision before performing actual merges.
+
 # Release 1.1
 ## Major Features And Improvements
 - Adding `"from_config"` as a builtin factory that accepts a config file for instantiation.
