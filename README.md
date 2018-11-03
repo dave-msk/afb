@@ -4,6 +4,14 @@
 
 Abstract Factory Broker (`afb`) is a library that facilitates abstract factory management. It introduces a mechanism for transforming configuration files into Python objects through a network of abstract factories, allowing flexible specification of execution behavior.
 
+## Installation
+
+This library supports Python 3.3+.
+
+```bash
+$ pip install afb
+```
+
 ## Mechanism
 
 This package consists of two classes:
