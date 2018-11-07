@@ -96,11 +96,11 @@ class Broker(object):
     if not isinstance(mfr, Manufacturer):
       raise TypeError("`mfr` must be a `Manufacturer`. Given: {}"
                       .format(mfr))
-    mfr = self.get_manufacturer(mfr.cls)
-    if mfr is None:
+    _mfr = self.get_manufacturer(mfr.cls)
+    if _mfr is None:
       raise ValueError("Manufacturer with output class {} is not registered."
                        .format(mfr.cls))
-    mfr.merge(key=key, mfr=mfr)
+    _mfr.merge(key=key, mfr=mfr)
 
   def merge_all(self, mfrs_dict):
     """Merge multiple manufacturers for each key.
