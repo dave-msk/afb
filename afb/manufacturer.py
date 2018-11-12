@@ -162,6 +162,9 @@ class Manufacturer(object):
   def factories(self):
     return copy.deepcopy(self._factories)
 
+  def has_method(self, method):
+    return method in self._builtin or method in self._factories
+
   def _init_builtin(self):
     target = 'builtin'
     self._register(
@@ -200,7 +203,7 @@ class Manufacturer(object):
             and returns it.
         - Output class of `mfr` is not a subclass of this output class.
     """
-    mfr = _maybe_get_mfr(mfr)
+    mfr = maybe_get_mfr(mfr)
     if mfr is None:
       self._raise_error(TypeError,
                         "\"mfr\" must be either a `Manufacturer` or a "
@@ -226,7 +229,7 @@ class Manufacturer(object):
     """
     mfr_dict_validated = {}
     for key, mfr in six.iteritems(mfr_dict):
-      mfr = _maybe_get_mfr(mfr)
+      mfr = maybe_get_mfr(mfr)
       self._validate_merge_request(key, mfr)
       mfr_dict_validated[key] = mfr
 
@@ -612,15 +615,13 @@ def _normalized_factory_descriptions(desc):
   return {"short": short, "long": long}
 
 
-def _maybe_get_mfr(maybe_mfr):
+def maybe_get_mfr(maybe_mfr):
   mfr = None
   if isinstance(maybe_mfr, Manufacturer):
     mfr = maybe_mfr
-  elif six.callable(maybe_mfr):
-    try:
-      mfr = maybe_mfr()
-    except TypeError:
-      pass
+  elif (six.callable(maybe_mfr) and
+        len(inspect.signature(maybe_mfr).parameters) == 0):
+    mfr = maybe_mfr()
 
   if isinstance(mfr, Manufacturer):
     return mfr

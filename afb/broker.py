@@ -21,6 +21,7 @@ import six
 from threading import Lock
 
 from afb.manufacturer import Manufacturer
+from afb.manufacturer import maybe_get_mfr
 from afb.primitives import get_primitives_mfrs
 from afb.utils import docs
 
@@ -82,17 +83,19 @@ class Broker(object):
 
     Args:
       key: A string that serves as the root of the factories from
-       `mfr`. If None, the original method name will be used directly.
-      mfr: A manufacturer whose factories are to be merged.
+        `mfr`. If None, the original method name will be used directly.
+      mfr: A manufacturer, or a function that accepts nothing and returns one,
+        whose factories are to be merged.
 
     Raises:
       KeyError:
         - Any of the resulting keys has been registered.
       TypeError:
-        - `mfr` is not a `Manufacturer`.
+        - `mfr` is not a `Manufacturer` nor a function which returns one.
       ValueError:
         - `Manufacturer` with output class of the given one is not registered.
     """
+    mfr = maybe_get_mfr(mfr)
     if not isinstance(mfr, Manufacturer):
       raise TypeError("`mfr` must be a `Manufacturer`. Given: {}"
                       .format(mfr))
@@ -132,21 +135,23 @@ class Broker(object):
       checked.append(mfr)
     [self.register(mfr) for mfr in checked]
 
-  def make(self, cls, params=None):
-
-    if isinstance(params, cls):
-      return params
+  def make(self, cls, spec=None):
+    if isinstance(spec, cls):
+      if cls is not dict or len(spec) > 1:
+        return spec
 
     mfr = self._manufacturers.get(cls, None)
     if mfr is None:
       raise KeyError("Unregistered manufacturer for class: {}".format(cls))
 
-    params = params or {None: None}
-    if not isinstance(params, dict) or len(params) != 1:
-      raise TypeError("`params` must be either an instance of the target type "
+    spec = spec or {None: None}
+    if not isinstance(spec, dict) or len(spec) != 1:
+      raise TypeError("`spec` must be either an instance of the target type "
                       "or a singleton dictionary.")
 
-    method, params = next(six.iteritems(params))
+    method, params = next(six.iteritems(spec))
+    if cls is dict and not mfr.has_method(method):
+      return spec
     return mfr.make(method=method, params=params)
 
   # TODO: Export documentations for builtin factories
