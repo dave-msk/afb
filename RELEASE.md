@@ -5,9 +5,12 @@
 
 ## Breaking Changes
 - All occurrances of the keyword argument `manufacturer` has been changed to `mfr`.
+- **From 1.2.1:** `params` in `Broker.make` is renamed to `spec`.
 
 ## Bug Fixes and Other Changes
 - `Manufacturer.merge_all` will now check if there is any key collision before performing actual merges.
+- **From 1.2.1:** Fixed `Broker.merge` to support function wrapped `Manufacturer`.
+- **From 1.2.1:** Exported `misc` module that contains convenient helper functions for `Manufacturer` construction.
 
 # Release 1.1
 ## Major Features And Improvements
