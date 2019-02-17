@@ -69,7 +69,7 @@ class Broker(object):
     return list(self._manufacturers.keys())
 
   def get_manufacturer(self, cls):
-    return copy.deepcopy(self._manufacturers.get(cls))
+    return self._manufacturers.get(cls)
 
   def merge(self, key, brk):
     """Merge all `Manufacturer`s from a `Broker`.
