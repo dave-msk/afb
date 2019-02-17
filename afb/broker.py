@@ -97,7 +97,7 @@ class Broker(object):
     classes = brk.classes
     for cls in classes:
       mfr = brk.get_manufacturer(cls)
-      self.merge(key, mfr)
+      self.merge_mfr(key, mfr)
 
   def merge_mfr(self, key, mfr):
     """Merge `Manufacturer` with the same output class.
