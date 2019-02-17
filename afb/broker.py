@@ -1,4 +1,4 @@
-# Copyright 2018 Siu-Kei Muk (David). All Rights Reserved.
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import copy
 import os
 import six
 from threading import Lock
 
 from afb.manufacturer import Manufacturer
-from afb.manufacturer import maybe_get_mfr
 from afb.primitives import get_primitives_mfrs
 from afb.utils import docs
+from afb.utils import types
 
 
 class Broker(object):
@@ -68,14 +69,43 @@ class Broker(object):
     return list(self._manufacturers.keys())
 
   def get_manufacturer(self, cls):
-    return self._manufacturers.get(cls)
+    return copy.deepcopy(self._manufacturers.get(cls))
 
-  def merge(self, key, mfr):
+  def merge(self, key, brk):
+    """Merge all `Manufacturer`s from a `Broker`.
+
+    This method merges all the `Manufacturer`s in the given `Broker` to the
+    managed ones. All the `Manufacturer`s in `brk` will be merged with `key`.
+
+    See docstring of `Broker.merge` and `Manufacturer.merge` for more details.
+
+    Args:
+      key: A string that serves as the root of the factories from each
+        `Manufacturer` managed by `brk`. If None, the original method name
+        will be used directly.
+      brk: A `Broker`, or a function that accepts nothing and returns one,
+        whose `Manufacturer`s are to be merged.
+
+    Raises:
+      KeyError:
+        - Any of the resulting factory keys has been registered.
+      TypeError:
+        - `brk` is not a `Broker` nor a function which returns one.
+    """
+    brk = types.maybe_get_cls(brk, Broker)
+    key = types.maybe_get_cls(key, str)
+    classes = brk.classes
+    for cls in classes:
+      mfr = brk.get_manufacturer(cls)
+      self.merge(key, mfr)
+
+  def merge_mfr(self, key, mfr):
     """Merge `Manufacturer` with the same output class.
 
-    This method merges the factories in the given `Manufacturer` to the
-    registered one. The method key of the newly added factories will have
-    the form:
+    This method merges the factories in the given `Manufacturer` to the managed
+    one (an empty `Manufacturer` will be created and registered if no
+    correspondence is found). The method key of the newly added factories will
+    have the form:
 
       * "key/<method_name>"
 
@@ -84,28 +114,23 @@ class Broker(object):
     Args:
       key: A string that serves as the root of the factories from
         `mfr`. If None, the original method name will be used directly.
-      mfr: A manufacturer, or a function that accepts nothing and returns one,
+      mfr: A `Manufacturer`, or a function that accepts nothing and returns one,
         whose factories are to be merged.
 
     Raises:
       KeyError:
-        - Any of the resulting keys has been registered.
+        - Any of the resulting factory keys has been registered.
       TypeError:
         - `mfr` is not a `Manufacturer` nor a function which returns one.
-      ValueError:
-        - `Manufacturer` with output class of the given one is not registered.
     """
-    mfr = maybe_get_mfr(mfr)
-    if not isinstance(mfr, Manufacturer):
-      raise TypeError("`mfr` must be a `Manufacturer`. Given: {}"
-                      .format(mfr))
-    _mfr = self.get_manufacturer(mfr.cls)
-    if _mfr is None:
-      raise ValueError("Manufacturer with output class {} is not registered."
-                       .format(mfr.cls))
+    mfr = types.maybe_get_cls(mfr, Manufacturer)
+    if mfr.cls not in self._manufacturers:
+      self.register(Manufacturer(mfr.cls))
+
+    _mfr = self._manufacturers[mfr.cls]
     _mfr.merge(key=key, mfr=mfr)
 
-  def merge_all(self, mfrs_dict):
+  def merge_mfrs(self, mfrs_dict):
     """Merge multiple manufacturers for each key.
 
     Args:
@@ -115,7 +140,7 @@ class Broker(object):
     """
     for key, mfrs in six.iteritems(mfrs_dict):
       for mfr in mfrs:
-        self.merge(key, mfr)
+        self.merge_mfr(key, mfr)
 
   def register(self, mfr):
     if not isinstance(mfr, Manufacturer):

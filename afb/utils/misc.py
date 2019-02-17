@@ -1,4 +1,4 @@
-# Copyright 2018 Siu-Kei Muk (David). All Rights Reserved.
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,17 +20,17 @@ import six
 from afb.manufacturer import Manufacturer
 
 
-def create_mfr(cls, fty_fn_dict, keyword_mode=False):
+def create_mfr(cls, fct_fn_dict, keyword_mode=False):
   mfr = Manufacturer(cls)
-  mfr.register_dict(fty_fn_dict, keyword_mode=keyword_mode)
+  mfr.register_dict(fct_fn_dict, keyword_mode=keyword_mode)
   return mfr
 
 
-def create_mfr_with_builtin(cls, fty_fn_dict, keyword_mode=False):
+def create_mfr_with_builtin(cls, fct_fn_dict, keyword_mode=False):
   class BuiltinManufacturer(Manufacturer):
     def _init_builtin(self):
       super(BuiltinManufacturer, self)._init_builtin()
-      for k, fn in six.iteritems(fty_fn_dict):
+      for k, fn in six.iteritems(fct_fn_dict):
         if keyword_mode:
           kwargs = dict(fn(), target="builtin")
           self._register(k, **kwargs)

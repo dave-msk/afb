@@ -2,10 +2,13 @@
 ## Major Features And Improvements
 - Added indicator of which `Manufacturer` has raised exception for easier debugging.
 - The argument `mfr` now accepts callable that takes no argument and returns a `Manufacturer`, other then a direct `Manufacturer` object for lazy evaluation.
+- **From 1.2.2:** Added `Broker`-level merge. See below for API changes.
 
 ## Breaking Changes
 - All occurrances of the keyword argument `manufacturer` has been changed to `mfr`.
 - **From 1.2.1:** `params` in `Broker.make` is renamed to `spec`.
+- **From 1.2.2:** `fty_fn_dict` in `utils.create_mfr` is renamed to `fct_fn_dict`.
+- **From 1.2.2:** Original `Broker.merge` & `Broker.merge_all` for `Manufacturer` merging is renamed to `Broker.merge_mfr` and `Broker.merge_mfrs`. The method `Broker.merge` now performs `Broker`-level merges.
 
 ## Bug Fixes and Other Changes
 - `Manufacturer.merge_all` will now check if there is any key collision before performing actual merges.

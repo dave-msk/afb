@@ -1,4 +1,4 @@
-# Copyright 2018 Siu-Kei Muk (David). All Rights Reserved.
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import sys
 from threading import RLock
 
 from afb.utils import errors
+from afb.utils import types
 
 
 _TYPE_CHECKS = [
@@ -203,7 +204,7 @@ class Manufacturer(object):
             and returns it.
         - Output class of `mfr` is not a subclass of this output class.
     """
-    mfr = maybe_get_mfr(mfr)
+    mfr = types.maybe_get_cls(mfr, Manufacturer)
     if mfr is None:
       self._raise_error(TypeError,
                         "\"mfr\" must be either a `Manufacturer` or a "
@@ -229,7 +230,7 @@ class Manufacturer(object):
     """
     mfr_dict_validated = {}
     for key, mfr in six.iteritems(mfr_dict):
-      mfr = maybe_get_mfr(mfr)
+      mfr = types.maybe_get_cls(mfr, Manufacturer)
       self._validate_merge_request(key, mfr)
       mfr_dict_validated[key] = mfr
 
@@ -312,11 +313,11 @@ class Manufacturer(object):
 
     In `registry.py`:
     ```python
-    from . import factories as fty
+    from . import factories as fct
 
     REGISTRY = {
-      'create': fty.create.get_create,
-      'load': fty.load.get_load
+      'create': fct.create.get_create,
+      'load': fct.load.get_load
     }
     ```
 
@@ -456,8 +457,8 @@ class Manufacturer(object):
     """
     # 0. Sanity checks
     method = method or self.default
-    fty_spec = self._get_factory_spec(method)
-    if fty_spec is None:
+    fct_spec = self._get_factory_spec(method)
+    if fct_spec is None:
       raise self._raise_error(ValueError,
                               "Unregistered method in manufacturer {}: {}"
                               .format(self.cls, method))
@@ -465,16 +466,17 @@ class Manufacturer(object):
     errors.validate_kwargs(params, 'params')
 
     # 1. Retrieve factory and signature
-    fty = fty_spec['fn']
-    sig = fty_spec['sig']
-    rqd_args = fty_spec['rqd_args']
-    params = params or fty_spec['params']
+    fct = fct_spec['fn']
+    sig = fct_spec['sig']
+    rqd_args = fct_spec['rqd_args']
+    params = params or fct_spec['params']
     errors.validate_args(params.keys(), sig.keys())
 
     # 2. Prepare arguments
     #   2.1. Add `None` to required arguments if not provided
     params.update({k: None for k in rqd_args if k not in params})
 
+    # TODO: Support types with nested structures with arbitrary depth
     #   2.2. Transform arguments
     for k, p in six.iteritems(params):
       arg_type = sig[k]['type']
@@ -489,7 +491,7 @@ class Manufacturer(object):
       params[k] = arg
 
     # 3. Call factory
-    result = fty(**params)
+    result = fct(**params)
     if result is not None and not isinstance(result, self.cls):
       raise self._raise_error(TypeError,
                               "Registered factory with key `{}` does not "
@@ -614,17 +616,3 @@ def _normalized_factory_descriptions(desc):
     raise TypeError("The descriptions must be strings. Given: {}".format(desc))
   return {"short": short, "long": long}
 
-
-def maybe_get_mfr(maybe_mfr):
-  mfr = None
-  if isinstance(maybe_mfr, Manufacturer):
-    mfr = maybe_mfr
-  elif (six.callable(maybe_mfr) and
-        len(inspect.signature(maybe_mfr).parameters) == 0):
-    mfr = maybe_mfr()
-
-  if isinstance(mfr, Manufacturer):
-    return mfr
-
-  raise TypeError("A `Manufacturer` or a function that accepts nothing and "
-                  "returns one is expected. Given: {}".format(maybe_mfr))

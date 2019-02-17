@@ -1,4 +1,4 @@
-# Copyright 2018 Siu-Kei Muk (David). All Rights Reserved.
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@ from __future__ import division
 from __future__ import print_function
 
 from afb.utils.misc import create_mfr_with_builtin
-from . import factories as fty
+from afb.primitives.dict import factories as fct
 
-_BUILTIN_FTY = {
-    "load_config": fty.config.get_load_config
+_BUILTIN_FCT = {
+    "load_config": fct.config.get_load_config
 }
 
 
 def create_dict_mfr():
-  return create_mfr_with_builtin(dict, _BUILTIN_FTY)
+  return create_mfr_with_builtin(dict, _BUILTIN_FCT)

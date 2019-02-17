@@ -1,4 +1,4 @@
-# Copyright 2018 Siu-Kei Muk (David). All Rights Reserved.
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@ from __future__ import division
 from __future__ import print_function
 
 from afb.utils.misc import create_mfr_with_builtin
-from . import factories as fty
+from afb.primitives.integer import factories as fct
 
-_BUILTIN_FTY = {
+_BUILTIN_FCT = {
 }
 
 
 def create_int_mfr():
-  return create_mfr_with_builtin(int, _BUILTIN_FTY)
+  return create_mfr_with_builtin(int, _BUILTIN_FCT)
