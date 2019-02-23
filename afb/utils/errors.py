@@ -18,10 +18,11 @@ from __future__ import print_function
 
 import six
 
+from afb.utils import types
 
-def validate_is_string(obj, name):
-  if obj is not None and not isinstance(obj, six.string_types):
-    raise TypeError("`{}` must be a string. Given: {}".format(name, type(obj)))
+
+class StructMismatchError(Exception):
+  pass
 
 
 def validate_is_callable(obj, name):
@@ -29,11 +30,20 @@ def validate_is_callable(obj, name):
     raise ValueError("`{}` must be a callable. Given: {}".format(name, obj))
 
 
+def validate_type(obj, cls, name):
+  if obj is not None and not isinstance(obj, cls):
+    raise TypeError("\"{}\" must be of type \"{}\". Given: {}"
+                    .format(name, cls.__name__, type(obj)))
+
+
 def validate_args(input_args, all_args):
   inv_args = set(input_args) - set(all_args)
   if inv_args:
-    raise ValueError("Invalid arguments. Expected: {}, Given: {}."
-                     .format(sorted(all_args), sorted(input_args)))
+    raise ValueError("Invalid arguments.\n"
+                     "Expected: {}\nGiven: {}\nInvalid: {}."
+                     .format(sorted(all_args),
+                             sorted(input_args),
+                             sorted(inv_args)))
 
 
 def validate_kwargs(obj, name):
@@ -49,3 +59,66 @@ def validate_kwargs(obj, name):
   if inv_keys:
     raise TypeError("Keys in `{}` must be of string type. Given: {}"
                     .format(name, inv_keys))
+
+
+def validate_struct(type_spec, struct):
+  # `list` case
+  if isinstance(type_spec, list) and isinstance(struct, list):
+    for s in struct:
+      validate_struct(type_spec[0], s)
+    return
+
+  # `dict` case
+  if isinstance(type_spec, dict) and isinstance(struct, dict):
+    k_spec, v_spec = next(six.iteritems(type_spec))
+    for ks, vs in six.iteritems(struct):
+      validate_struct(k_spec, ks)
+      validate_struct(v_spec, vs)
+    return
+
+  # `tuple` case
+  if isinstance(type_spec, tuple) and isinstance(struct, tuple):
+    if len(type_spec) != len(struct):
+      # TODO: Add descriptive error message
+      raise StructMismatchError()
+    for t_spec, s in zip(type_spec, struct):
+      validate_struct(t_spec, s)
+    return
+
+  # Direct type case
+  if isinstance(type_spec, type):
+    if (struct is None) or \
+       (isinstance(struct, type_spec)) or \
+       (types.is_obj_spec(struct)):
+      return
+    # TODO: Add descriptive error message
+    raise TypeError()
+
+  # None of the valid cases matches.
+  # TODO: Add descriptive error message
+  raise StructMismatchError()
+
+
+def validate_type_spec(type_spec):
+  if isinstance(type_spec, list) and len(type_spec) == 1:
+    validate_type_spec(type_spec[0])
+    return
+  if isinstance(type_spec, dict) and len(type_spec) == 1:
+    k, v = next(six.iteritems(type_spec))
+    validate_type_spec(k)
+    validate_type_spec(v)
+    return
+  if isinstance(type_spec, tuple):
+    for s in type_spec:
+      validate_type_spec(s)
+    return
+  if isinstance(type_spec, type):
+    return
+  raise ValueError("The type specification must be either of the following:\n"
+                   "1. Singleton `dict` where the key and value are both "
+                   "type specifications;\n"
+                   "2. Singleton `list`, where the content is a "
+                   "type specification; \n"
+                   "3. `tuple` of type specifications; or\n"
+                   "4. A class or type.\n"
+                   "Given: {}".format(type_spec))

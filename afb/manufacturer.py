@@ -28,16 +28,6 @@ from afb.utils import errors
 from afb.utils import types
 
 
-_TYPE_CHECKS = [
-    lambda t: isinstance(t, type),
-    lambda t: isinstance(t, list) and len(t) == 1 and isinstance(t[0], type),
-    lambda t: isinstance(t, tuple) and all(isinstance(e, type) for e in t),
-    lambda t: (isinstance(t, dict) and len(t) == 1 and
-               all(isinstance(k, type) and
-                   isinstance(v, type) for k, v in six.iteritems(t)))
-]
-
-
 class Manufacturer(object):
   """An abstract factory of a class.
 
@@ -85,11 +75,11 @@ class Manufacturer(object):
   ```python
   # Define manufacturer for class A.
   mfr_a = Manufacturer(A)
-  mfr_a.register('create', A, {'u': float})
+  mfr_a.register("create", A, {"u": float})
 
   # Define manufacturer for class B.
   mfr_b = Manufacturer(B)
-  mfr_b.register('create', B, {'a': A, 'z': float})
+  mfr_b.register("create", B, {"a": A, "z": float})
   ```
 
   In order to allow the manufacturers to prepare objects required for the
@@ -109,10 +99,10 @@ class Manufacturer(object):
   1. A direct call through `Manufacturer.make`:
 
     ```python
-    params = {'a': {'create': {'u': 37.0}},
-              'z': -41.0}
+    params = {"a": {"create": {"u": 37.0}},
+              "z": -41.0}
 
-    b = mfr_b.make(method='create', params=params)
+    b = mfr_b.make(method="create", params=params)
     ```
 
   2. A call through `Broker.make`. In this way, we need to wrap the `method` and
@@ -120,10 +110,10 @@ class Manufacturer(object):
      required for the broker to choose the right manufacturer.
 
     ```python
-    params = {'create':  # Factory key w.r.t manufacturer B
-              {'a': {'create':  # Factory key w.r.t manufacturer A
-                     {'u': 37.0}},
-               'z': -41.0}}
+    params = {"create":  # Factory key w.r.t manufacturer B
+              {"a": {"create":  # Factory key w.r.t manufacturer A
+                     {"u": 37.0}},
+               "z": -41.0}}
     b = broker.make(cls=B, params=params)
     ```
   """
@@ -154,9 +144,10 @@ class Manufacturer(object):
   @default.setter
   def default(self, method):
     with self._lock:
-      errors.validate_is_string(method, 'method')
+      self._wrap_error(lambda: errors.validate_type(method, str, "method"))
       if self._get_factory_spec(method) is None:
-        raise ValueError("The method with key `{}` not found.".format(method))
+        self._raise_error(ValueError,
+                          "The method with key `{}` not found.".format(method))
       self._default = method
 
   @property
@@ -167,13 +158,13 @@ class Manufacturer(object):
     return method in self._builtin or method in self._factories
 
   def _init_builtin(self):
-    target = 'builtin'
+    target = "builtin"
     self._register(
-        'from_config', self._from_config, {'config': str}, target=target)
+        "from_config", self._from_config, {"config": str}, target=target)
 
   # TODO: Add documentations
   def _from_config(self, config):
-    params = self._broker.make(dict, {'load_config': {'config': config}})
+    params = self._broker.make(dict, {"load_config": {"config": config}})
     return self._broker.make(self.cls, params)
 
   def _get_factory_spec(self, key):
@@ -242,9 +233,9 @@ class Manufacturer(object):
     for method, spec in six.iteritems(factories):
       method = _merged_name(key, method)
       self.register(method=method,
-                    factory=spec['fn'],
-                    sig=spec['sig'],
-                    params=spec['params'],
+                    factory=spec["fn"],
+                    sig=spec["sig"],
+                    params=spec["params"],
                     descriptions=spec["descriptions"])
 
   def set_broker(self, broker):
@@ -316,8 +307,8 @@ class Manufacturer(object):
     from . import factories as fct
 
     REGISTRY = {
-      'create': fct.create.get_create,
-      'load': fct.load.get_load
+      "create": fct.create.get_create,
+      "load": fct.load.get_load
     }
     ```
 
@@ -330,11 +321,11 @@ class Manufacturer(object):
 
     def get_create():
       sig = {
-        'arg_1': str,
-        'arg_2': [int],
-        'arg_3': bool
+        "arg_1": str,
+        "arg_2": [int],
+        "arg_3": bool
       }
-      return create, sig, {'arg_1': 'Hello World!', 'arg_2': [1, -1, 0]}
+      return create, sig, {"arg_1": "Hello World!", "arg_2": [1, -1, 0]}
     ```
 
     and in `factories/load.py`:
@@ -346,8 +337,8 @@ class Manufacturer(object):
 
     def get_load():
       sig = {
-        'filename': str,
-        'mode': bool
+        "filename": str,
+        "mode": bool
       }
       return load, sig  # The default parameter is optional.
     ```
@@ -384,41 +375,50 @@ class Manufacturer(object):
                 sig,
                 params=None,
                 descriptions=None,
-                target='factories'):
+                target="factories"):
 
     # Retrieve registry
-    registry = getattr(self, '_%s' % target, self._factories)
+    registry = getattr(self, "_%s" % target, self._factories)
 
     # Check types
-    errors.validate_is_string(method, 'method')
-    errors.validate_is_callable(factory, 'factory')
+    self._wrap_error(lambda: errors.validate_type(method, str, "method"))
+    self._wrap_error(
+        lambda: errors.validate_is_callable(factory, "factory"), method=method)
 
     if not isinstance(sig, dict):
       raise self._raise_error(TypeError,
-                              "`sig` must be a dict mapping factory arguments "
-                              "to their corresponding types.")
+                              "Method: {}\n`sig` must be a dict mapping "
+                              "factory arguments to their corresponding type "
+                              "specification, or `dict` with type "
+                              "specification and description, keyed by "
+                              "\"type\" and \"description\" respectively."
+                              .format(method))
 
     params = params or {}
-    errors.validate_kwargs(params, 'params')
+    self._wrap_error(
+        lambda: errors.validate_kwargs(params, "params"), method=method)
 
-    try:
-      descriptions = _normalized_factory_descriptions(descriptions)
-      sig = _parse_signature(sig)
-    except:
-      e = sys.exc_info()
-      self._raise_error(e[0], str(e[1]))
+    descriptions = self._wrap_error(
+        lambda: _normalized_factory_descriptions(descriptions, method),
+        method=method)
 
     # Check if `sig` contains all required but no invalid arguments.
     rqd_args, all_args = fn_args(factory)
-    sig_args = set(sig.keys())
-    miss_args = rqd_args - sig_args
+    miss_args = rqd_args - set(sig)
     if miss_args:
       raise self._raise_error(ValueError,
-                              "Missing required arguments from `sig`."
-                              "\nRequired: {}, Given: {}"
-                              .format(sorted(rqd_args), sorted(sig_args)))
-    errors.validate_args(sig_args, all_args)
-    errors.validate_args(params.keys(), sig_args)
+                              "Method: {}\nMissing required arguments from "
+                              "`sig`. \nRequired: {}\nGiven: {}\nMissing: {}"
+                              .format(method,
+                                      sorted(rqd_args),
+                                      sorted(sig),
+                                      sorted(miss_args)))
+    self._wrap_error(lambda: errors.validate_args(sig, all_args), method=method)
+    self._wrap_error(lambda: errors.validate_args(params, sig), method=method)
+
+    norm_sig = {k: self._wrap_error(lambda: _normalized_sig_entry(s),
+                                    method="method")
+                for k, s in six.iteritems(sig)}
 
     # Register factory.
     with self._lock:
@@ -426,11 +426,11 @@ class Manufacturer(object):
         raise self._raise_error(ValueError,
                                 "The method `{}` is already registered."
                                 .format(method))
-      registry[method] = {'fn': factory,
-                          'sig': sig,
-                          'rqd_args': rqd_args,
-                          'params': params,
-                          'descriptions': descriptions}
+      registry[method] = {"fn": factory,
+                          "sig": norm_sig,
+                          "rqd_args": rqd_args,
+                          "params": params,
+                          "descriptions": descriptions}
 
   def make(self, method=None, params=None):
     """Make object according to specification.
@@ -455,43 +455,46 @@ class Manufacturer(object):
         1. `params` is not a dictionary.
         2. Specified factory does not return the intended class object.
     """
-    # 0. Sanity checks
+    # 0. Sanity check
     method = method or self.default
     fct_spec = self._get_factory_spec(method)
     if fct_spec is None:
       raise self._raise_error(ValueError,
-                              "Unregistered method in manufacturer {}: {}"
-                              .format(self.cls, method))
+                              "Unregistered method: {}".format(method))
 
-    errors.validate_kwargs(params, 'params')
+    self._wrap_error(lambda: errors.validate_kwargs(params, "params"),
+                     method=method)
 
     # 1. Retrieve factory and signature
-    fct = fct_spec['fn']
-    sig = fct_spec['sig']
-    rqd_args = fct_spec['rqd_args']
-    params = params or fct_spec['params']
-    errors.validate_args(params.keys(), sig.keys())
+    fct = fct_spec["fn"]
+    sig = fct_spec["sig"]
+    rqd_args = fct_spec["rqd_args"]
+    params = params or fct_spec["params"]
+    self._wrap_error(lambda: errors.validate_args(params, sig), method=method)
 
-    # 2. Prepare arguments
-    #   2.1. Add `None` to required arguments if not provided
-    params.update({k: None for k in rqd_args if k not in params})
+    # 2. Prepare inputs
+    # 2.1. Ensure all required args are provided
+    missing = set(rqd_args) - set(params)
+    if missing:
+      self._raise_error(
+          TypeError,
+          "Method: {}\nMissing required arguments.\n"
+          "Required: {}\nGiven: {}\nMissing: {}"
+          .format(method, sorted(rqd_args), sorted(params), sorted(missing)))
 
-    # TODO: Support types with nested structures with arbitrary depth
-    #   2.2. Transform arguments
+    # 2.2. Validate parameter structures
     for k, p in six.iteritems(params):
-      arg_type = sig[k]['type']
-      if isinstance(arg_type, list) and isinstance(p, list):
-        arg = self._transform_arg_list(method, k, arg_type, p)
-      elif isinstance(arg_type, tuple) and isinstance(p, tuple):
-        arg = self._transform_arg_tuple(method, k, arg_type, p)
-      elif isinstance(arg_type, dict) and isinstance(p, dict):
-        arg = self._transform_arg_dict(method, k, arg_type, p)
-      else:
-        arg = self._get_obj(arg_type, p)
-      params[k] = arg
+      type_spec = sig[k]["type"]
+      self._wrap_error(lambda: errors.validate_struct(type_spec, p),
+                       prefix="Method: {}\nArgument: {}".format(method, k))
+
+    # 2.3. Construct inputs
+    inputs = {}
+    for k, p in six.iteritems(params):
+      inputs[k] = None if p is None else self._get_struct(sig[k]["type"], p)
 
     # 3. Call factory
-    result = fct(**params)
+    result = fct(**inputs)
     if result is not None and not isinstance(result, self.cls):
       raise self._raise_error(TypeError,
                               "Registered factory with key `{}` does not "
@@ -499,38 +502,24 @@ class Manufacturer(object):
                               .format(method, self.cls.__name__))
     return result
 
-  def _transform_arg_list(self, method, kwarg, arg_type, params):
-    if len(arg_type) != 1:
-      raise self._raise_error(ValueError,
-                              "Only homogeneous lists are allowed. "
-                              "Method: {}, Argument: {}, Given: {}"
-                              .format(self.cls, method, kwarg, arg_type))
-    return [self._get_obj(arg_type[0], p) for p in params]
+  def _get_struct(self, type_spec, nested):
+    if isinstance(type_spec, list) and isinstance(nested, list):
+      t = type_spec[0]
+      return [self._get_struct(t, n) for n in nested]
+    if isinstance(type_spec, dict) and isinstance(nested, dict):
+      kt, vt = next(six.iteritems(type_spec))
+      return {self._get_struct(kt, kn): self._get_struct(vt, vn)
+              for kn, vn in six.iteritems(nested)}
+    if isinstance(type_spec, tuple) and isinstance(nested, tuple):
+      return tuple(self._get_struct(t, n) for t, n in zip(type_spec, nested))
+    if isinstance(type_spec, type):
+      if nested is None or isinstance(nested, type_spec):
+        return nested
+      return self._broker.make(type_spec, nested)
 
-  def _transform_arg_tuple(self, method, kwarg, arg_type, params):
-    if len(arg_type) != len(params):
-      raise self._raise_error(
-          ValueError,
-          "Tuple argument length mismatch. "
-          "Method: {}, Argument: {}, Expected: {}, Given: {}"
-          .format(method, kwarg, len(arg_type), len(params)))
-    return tuple([self._get_obj(t, p) for t, p in zip(arg_type, params)])
-
-  def _transform_arg_dict(self, method, kwarg, arg_type, params):
-    if len(arg_type) != 1:
-      raise self._raise_error(
-          ValueError,
-          "Only dictionaries with homogeneous keys and values are allowed. "
-          "Method: {}, Argument: {}, Given: {}."
-          .format(self.cls, method, kwarg, arg_type))
-    k_t, v_t = iter(six.iteritems(arg_type)).__next__()
-    return {self._get_obj(k_t, k):
-            self._get_obj(v_t, v) for k, v in six.iteritems(params)}
-
-  def _get_obj(self, cls, inputs):
-    if inputs is None or isinstance(inputs, cls):
-      return inputs
-    return self._broker.make(cls, inputs)
+    # TODO: Add error message
+    # This line should be unreachable.
+    raise errors.StructMismatchError()
 
   def _validate_merge_request(self, key, mfr):
     if not isinstance(key, str):
@@ -540,7 +529,7 @@ class Manufacturer(object):
     if not isinstance(mfr, Manufacturer):
       raise self._raise_error(TypeError,
                               "`mfr` must be a `Manufacturer`. Given: {}"
-                              .format(mfr))
+                              .format(type(mfr)))
     if not issubclass(mfr.cls, self.cls):
       raise self._raise_error(TypeError,
                               "The output class of `mfr` must be a subclass of "
@@ -554,9 +543,20 @@ class Manufacturer(object):
                               "Please use another key for merge instead"
                               .format(sorted(collisions)))
 
+  def _wrap_error(self, fn, prefix=None, suffix=None, method=None):
+    try:
+      return fn()
+    except:
+      e = sys.exc_info()
+      message = str(e[1])
+      if method: message = "Method: {}\n{}".format(method, message)
+      if prefix: message = "%s\n%s" % (prefix, message)
+      if suffix: message = "%s\n%s" % (message, suffix)
+      self._raise_error(e[0], message)
+
   def _raise_error(self, err_type, message):
-    message = ("Raised from \"Manufacturer\" of class {}: {}"
-               .format(self.cls.__name__, message))
+    message = ("Raised from \"Manufacturer\" of class {}:\n{}"
+               .format(self.cls, message))
     raise err_type(message)
 
 
@@ -572,47 +572,29 @@ def _merged_name(key, name):
   return os.path.join(key, name)
 
 
-def _parse_signature(sig):
-  parsed = {}
-  for k, v in six.iteritems(sig):
-    v = _normalized_signature_entry(v)
-    parsed[k] = v
-  return parsed
-
-
-def _is_valid_type(t):
-  return any(check(t) for check in _TYPE_CHECKS)
-
-
-def _normalized_signature_entry(v):
+def _normalized_sig_entry(s):
   valid_keys = {"type", "description"}
-  if _is_valid_type(v):
-    return {"type": v, "description": ""}
-  elif (isinstance(v, dict) and
-        _is_valid_type(v.get("type")) and
-        not (valid_keys - set(six.iterkeys(v)))):
-    return {"type": v["type"], "description": v.get("description", "")}
-
-  raise ValueError("The value of an entry of the signature dictionary must "
-                   "either be a type specification, or a `dict` "
-                   "of length at most 2, with the type specification keyed by "
-                   "\"type\", and optionally a description in `str` of the "
-                   "argument keyed by \"description\".")
+  if not (isinstance(s, dict) and set(s) == valid_keys):
+    s = {"type": s, "description": ""}
+  type_spec = s["type"]
+  errors.validate_type_spec(type_spec)
+  return s
 
 
-def _normalized_factory_descriptions(desc):
+def _normalized_factory_descriptions(desc, method):
   valid_keys = {"short", "long"}
   desc = desc or {"short": ""}
-  if (not isinstance(desc, dict) or
-      "short" not in desc or
-      (set(six.iterkeys(desc)) - valid_keys)):
+  if (not isinstance(desc, dict)) or \
+     ("short" not in desc) or \
+     (set(desc) - valid_keys):
     raise ValueError("The factory description must either be `None` or a `dict`"
                      " with the short description keyed as by \"short\" "
                      "included. A long description keyed by \"long\" can be "
-                     "optionally provided. Given: {}".format(desc))
+                     "optionally provided.\n"
+                     "Method: {}\nGiven: {}".format(method, desc))
   short = desc["short"]
   long = desc.get("long", "")
   if not isinstance(short, str) or not isinstance(long, str):
-    raise TypeError("The descriptions must be strings. Given: {}".format(desc))
+    raise TypeError("The descriptions must be strings.\n"
+                    "Method: {}\nGiven: {}".format(method, desc))
   return {"short": short, "long": long}
-
