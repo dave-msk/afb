@@ -46,6 +46,25 @@ def validate_args(input_args, all_args):
                              sorted(inv_args)))
 
 
+def validate_rqd_args(input_args, rqd_args):
+  missing = set(rqd_args) - set(input_args)
+  if missing:
+    raise TypeError("Missing required arguments.\n"
+                    "Required: {}\nGiven: {}\nMissing: {}"
+                    .format(sorted(rqd_args),
+                            sorted(input_args),
+                            sorted(missing)))
+
+  inv_args = {k for k, v in six.iteritems(input_args)
+              if k in rqd_args and v is None}
+  if inv_args:
+    raise ValueError("Required arguments must not be None.\n"
+                     "Required: {}\nGiven: {}\nInvalid: {}"
+                     .format(sorted(rqd_args),
+                             sorted(input_args),
+                             sorted(inv_args)))
+
+
 def validate_kwargs(obj, name):
   if obj is None:
     return
