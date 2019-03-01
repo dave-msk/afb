@@ -99,9 +99,10 @@ def validate_struct(type_spec, struct):
   if isinstance(type_spec, tuple) and isinstance(struct, tuple):
     if len(type_spec) != len(struct):
       # TODO: Add descriptive error message
-      raise StructMismatchError("Input parameters are not aligned with"
-                                " required structure.\n"
-                                "Given: {}".format(type_spec))
+      raise StructMismatchError("Input parameter structure must conform"
+                                " to type specification.\n"
+                                "Required: {}\nGiven: {}"
+                                .format(type_spec, struct))
     for t_spec, s in zip(type_spec, struct):
       validate_struct(t_spec, s)
     return
@@ -113,16 +114,18 @@ def validate_struct(type_spec, struct):
        (types.is_obj_spec(struct)):
       return
     # TODO: Add descriptive error message
-    raise TypeError("The expected type must be either of the following:\n"
-                    "1. Null; \n"
+    raise TypeError("The input must be one of the following:\n"
+                    "1. None; \n"
                     "2. An instance of expected type; \n"
-                    "3. An object of `struct`")
+                    "3. An object of `struct`\n"
+                    "Given: {}".format(struct))
 
   # None of the valid cases matches.
   # TODO: Add descriptive error message
   raise StructMismatchError("Input parameters are not aligned with"
-                                " required structure.\n"
-                                "Given: {}".format(type_spec))
+                            " required structure.\n"
+                            "Required: {}\nGiven: {}"
+                            .format(type_spec, struct))
 
 
 def validate_type_spec(type_spec):
