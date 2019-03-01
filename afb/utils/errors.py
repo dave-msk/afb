@@ -102,7 +102,10 @@ def validate_struct(type_spec, struct):
       raise StructMismatchError("Input parameter structure must conform"
                                 " to type specification.\n"
                                 "Required: {}\nGiven: {}"
-                                .format(type_spec, struct))
+                                .format(type_spec, struct),
+                                "Required length of input: {}\n"
+                                "Given length of input: {}"
+                                .len(type_spec, struct))
     for t_spec, s in zip(type_spec, struct):
       validate_struct(t_spec, s)
     return
@@ -125,7 +128,10 @@ def validate_struct(type_spec, struct):
   raise StructMismatchError("Input parameters are not aligned with"
                             " required structure.\n"
                             "Required: {}\nGiven: {}"
-                            .format(type_spec, struct))
+                            .format(type_spec, struct),
+                            "Required length of input: {}\n"
+                            "Given length of input: {}"
+                            .len(type_spec, struct))
 
 
 def validate_type_spec(type_spec):
