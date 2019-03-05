@@ -120,9 +120,8 @@ def validate_struct(type_spec, struct):
     raise TypeError("The input must be one of the following:\n"
                     "1. None; \n"
                     "2. An instance of expected type; \n"
-                    "3. An object specification, which is a singleton `dict` "
-                    "mapping factory to a `dict` of arguments for "
-                    "instantiation.\n"
+                    "3. An object specification. (singleton `dict` mapping a "
+                    "factory to its arguments for instantiation)\n"
                     "Required: {}\nGiven: {}"
                     .format(type_spec, struct))
 
