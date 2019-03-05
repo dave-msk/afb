@@ -102,10 +102,10 @@ def validate_struct(type_spec, struct):
       raise StructMismatchError("Input parameter structure must conform"
                                 " to type specification.\n"
                                 "Required: {}\nGiven: {}"
-                                .format(type_spec, struct),
                                 "Required length of input: {}\n"
                                 "Given length of input: {}"
-                                .len(type_spec, struct))
+                                .format(type_spec, struct,
+                                        len(type_spec), len(struct)))
     for t_spec, s in zip(type_spec, struct):
       validate_struct(t_spec, s)
     return
@@ -120,18 +120,19 @@ def validate_struct(type_spec, struct):
     raise TypeError("The input must be one of the following:\n"
                     "1. None; \n"
                     "2. An instance of expected type; \n"
-                    "3. An object of `struct`\n"
-                    "Given: {}".format(struct))
+                    "3. An object specification, which is a singleton `dict` "
+                    "with the key referring to the factory of the expected "
+                    "type for object creation, and the value being a `dict` "
+                    "that contains its arguments.\n"
+                    "Required: {}\nGiven: {}"
+                    .format(type_spec, struct))
 
   # None of the valid cases matches.
   # TODO: Add descriptive error message
   raise StructMismatchError("Input parameters are not aligned with"
                             " required structure.\n"
                             "Required: {}\nGiven: {}"
-                            .format(type_spec, struct),
-                            "Required length of input: {}\n"
-                            "Given length of input: {}"
-                            .len(type_spec, struct))
+                            .format(type_spec, struct))
 
 
 def validate_type_spec(type_spec):
