@@ -121,9 +121,8 @@ def validate_struct(type_spec, struct):
                     "1. None; \n"
                     "2. An instance of expected type; \n"
                     "3. An object specification, which is a singleton `dict` "
-                    "with the key referring to the factory of the expected "
-                    "type for object creation, and the value being a `dict` "
-                    "that contains its arguments.\n"
+                    "mapping factory to a `dict` of arguments for "
+                    "instantiation.\n"
                     "Required: {}\nGiven: {}"
                     .format(type_spec, struct))
 
