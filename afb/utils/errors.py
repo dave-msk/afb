@@ -99,10 +99,9 @@ def validate_struct(type_spec, struct):
   if isinstance(type_spec, tuple) and isinstance(struct, tuple):
     if len(type_spec) != len(struct):
       # TODO: Add descriptive error message
-      raise StructMismatchError("The length of input tuple doesn't match with "
-                                "the type specification.\n"
-                                "Required length of input: {}\n"
-                                "Given length of input: {}"
+      raise StructMismatchError("Length mismatch for tuple typed argument.\n"
+                                "Required length: {}\n"
+                                "Given length: {}"
                                 .format(type_spec, struct,
                                         len(type_spec), len(struct)))
     for t_spec, s in zip(type_spec, struct):
@@ -126,8 +125,9 @@ def validate_struct(type_spec, struct):
 
   # None of the valid cases matches.
   # TODO: Add descriptive error message
-  raise StructMismatchError("Length mismatch for tuple typed argument.\n"
-                            "Required length: {}\nGiven length: {}"
+  raise StructMismatchError("Input parameter structure must conform "
+                            "to type specification.\n"
+                            "Required: {}\nGiven: {}"
                             .format(type_spec, struct))
 
 
