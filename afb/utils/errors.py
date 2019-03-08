@@ -102,8 +102,7 @@ def validate_struct(type_spec, struct):
       raise StructMismatchError("Length mismatch for tuple typed argument.\n"
                                 "Required length: {}\n"
                                 "Given length: {}"
-                                .format(type_spec, struct,
-                                        len(type_spec), len(struct)))
+                                .format(len(type_spec), len(struct)))
     for t_spec, s in zip(type_spec, struct):
       validate_struct(t_spec, s)
     return
