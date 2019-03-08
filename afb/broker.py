@@ -16,7 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import copy
 import os
 import six
 from threading import Lock
@@ -171,8 +170,11 @@ class Broker(object):
 
     spec = spec or {None: None}
     if not isinstance(spec, dict) or len(spec) != 1:
-      raise TypeError("`spec` must be either an instance of the target type "
-                      "or a singleton dictionary.")
+      raise TypeError("`spec` must be either:"
+                      "1. An instance of the target type.\n"
+                      "2. An object specification (singleton `dict` mapping a "
+                      "factory to its arguments for instantiation).\n"
+                      "Target Type: {}\nGiven: {}".format(cls, spec))
 
     method, params = next(six.iteritems(spec))
     if cls is dict and not mfr.has_method(method):

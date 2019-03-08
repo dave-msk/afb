@@ -498,14 +498,14 @@ class Manufacturer(object):
     return result
 
   def _get_struct(self, type_spec, nested):
-    if isinstance(type_spec, list) and isinstance(nested, list):
+    if isinstance(type_spec, list) and isinstance(nested, (list, tuple)):
       t = type_spec[0]
       return [self._get_struct(t, n) for n in nested]
     if isinstance(type_spec, dict) and isinstance(nested, dict):
       kt, vt = next(six.iteritems(type_spec))
       return {self._get_struct(kt, kn): self._get_struct(vt, vn)
               for kn, vn in six.iteritems(nested)}
-    if isinstance(type_spec, tuple) and isinstance(nested, tuple):
+    if isinstance(type_spec, tuple) and isinstance(nested, (list, tuple)):
       return tuple(self._get_struct(t, n) for t, n in zip(type_spec, nested))
     if isinstance(type_spec, type):
       if nested is None or isinstance(nested, type_spec):

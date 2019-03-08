@@ -82,7 +82,7 @@ def validate_kwargs(obj, name):
 
 def validate_struct(type_spec, struct):
   # `list` case
-  if isinstance(type_spec, list) and isinstance(struct, list):
+  if isinstance(type_spec, list) and isinstance(struct, (list, tuple)):
     for s in struct:
       validate_struct(type_spec[0], s)
     return
@@ -96,12 +96,11 @@ def validate_struct(type_spec, struct):
     return
 
   # `tuple` case
-  if isinstance(type_spec, tuple) and isinstance(struct, tuple):
+  if isinstance(type_spec, tuple) and isinstance(struct, (list, tuple)):
     if len(type_spec) != len(struct):
-      # TODO: Add descriptive error message
       raise StructMismatchError("Length mismatch for tuple typed argument.\n"
-                                "Required length: {}\n"
-                                "Given length: {}"
+                                "Required Length: {}\n"
+                                "Given Length: {}"
                                 .format(len(type_spec), len(struct)))
     for t_spec, s in zip(type_spec, struct):
       validate_struct(t_spec, s)
@@ -113,17 +112,14 @@ def validate_struct(type_spec, struct):
        (isinstance(struct, type_spec)) or \
        (types.is_obj_spec(struct)):
       return
-    # TODO: Add descriptive error message
     raise TypeError("The input must be one of the following:\n"
                     "1. None; \n"
                     "2. An instance of expected type; \n"
                     "3. An object specification. (singleton `dict` mapping a "
                     "factory to its arguments for instantiation)\n"
-                    "Required: {}\nGiven: {}"
-                    .format(type_spec, struct))
+                    "Expected Type: {}\nGiven: {}".format(type_spec, struct))
 
   # None of the valid cases matches.
-  # TODO: Add descriptive error message
   raise StructMismatchError("Input parameter structure must conform "
                             "to type specification.\n"
                             "Required: {}\nGiven: {}"

@@ -1,3 +1,8 @@
+# Release 1.3
+## Major Features And Improvements
+- `Manufacturer` now supports multi-level nested type specification.
+- Updated error messages
+
 # Release 1.2
 ## Major Features And Improvements
 - Added indicator of which `Manufacturer` has raised exception for easier debugging.
