@@ -99,7 +99,10 @@ def validate_struct(type_spec, struct):
   if isinstance(type_spec, tuple) and isinstance(struct, tuple):
     if len(type_spec) != len(struct):
       # TODO: Add descriptive error message
-      raise StructMismatchError()
+      raise StructMismatchError("Length mismatch for tuple typed argument.\n"
+                                "Required length: {}\n"
+                                "Given length: {}"
+                                .format(len(type_spec), len(struct)))
     for t_spec, s in zip(type_spec, struct):
       validate_struct(t_spec, s)
     return
@@ -111,11 +114,20 @@ def validate_struct(type_spec, struct):
        (types.is_obj_spec(struct)):
       return
     # TODO: Add descriptive error message
-    raise TypeError()
+    raise TypeError("The input must be one of the following:\n"
+                    "1. None; \n"
+                    "2. An instance of expected type; \n"
+                    "3. An object specification. (singleton `dict` mapping a "
+                    "factory to its arguments for instantiation)\n"
+                    "Required: {}\nGiven: {}"
+                    .format(type_spec, struct))
 
   # None of the valid cases matches.
   # TODO: Add descriptive error message
-  raise StructMismatchError()
+  raise StructMismatchError("Input parameter structure must conform "
+                            "to type specification.\n"
+                            "Required: {}\nGiven: {}"
+                            .format(type_spec, struct))
 
 
 def validate_type_spec(type_spec):
