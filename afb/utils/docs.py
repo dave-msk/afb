@@ -76,11 +76,11 @@ def export_factories_markdown(mfr,
 
     def format_arg_list_entry(arg, arg_sig, optional):
       arg_line = "- %s`%s`:" % ("(optional) " if optional else "", arg)
-      arg_type = arg_sig["type"]
+      type_spec = arg_sig["type"]
       type_line = make_type_line(
-          arg_type, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=False)
+          type_spec, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=False)
       full_type_line = make_type_line(
-          arg_type, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=True)
+          type_spec, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=True)
 
       desc_line = "  - Description: %s" % arg_sig["description"]
       return "\n".join((arg_line, type_line, full_type_line, desc_line))
@@ -106,32 +106,34 @@ def export_factories_markdown(mfr,
       f.write(factory_doc)
 
 
-def make_type_line(arg_type, root, cls_dir_fn, cls_desc_name, full_type=False):
+def make_type_line(type_spec, root, cls_dir_fn, cls_desc_name, full_type=False):
   prefix = "  - %sType: " % ("Full " if full_type else "")
 
-  def get_type_entity(arg_type):
-    path = os.path.join(root, cls_dir_fn(arg_type), "%s.md" % cls_desc_name)
-    name = arg_type.__qualname__
+  def get_type_entity(type_spec):
+    path = os.path.join(root, cls_dir_fn(type_spec), "%s.md" % cls_desc_name)
+    name = type_spec.__qualname__
     if full_type:
-      name = "%s.%s" % (arg_type.__module__, name)
+      name = "%s.%s" % (type_spec.__module__, name)
     return "[`%s`](%s)" % (name, path)
 
-  if isinstance(arg_type, type):
-    body = get_type_entity(arg_type)
-  elif isinstance(arg_type, list):
-    arg_type = arg_type[0]
-    body = "[%s]" % get_type_entity(arg_type)
-  elif isinstance(arg_type, tuple):
-    body = "(%s)" % ", ".join(get_type_entity(t) for t in arg_type)
-  elif isinstance(arg_type, dict):
-    kt, vt = iter(six.iteritems(arg_type)).__next__()
-    body = "{%s: %s}" % (get_type_entity(kt), get_type_entity(vt))
-  else:
-    # This line will not be reached as an error will be raised at factory
-    # registration time.
-    raise TypeError("Unknown type: {}".format(arg_type))
-
+  body = get_type_spec_repr(type_spec, get_type_entity)
   return "%s%s" % (prefix, body)
+
+
+def get_type_spec_repr(type_spec, link_fn):
+  if isinstance(type_spec, list):
+    return "[%s]" % get_type_spec_repr(type_spec[0], link_fn)
+  if isinstance(type_spec, dict):
+    kt, vt = next(six.iteritems(type_spec))
+    return "{%s: %s}" % (get_type_spec_repr(kt, link_fn),
+                         get_type_spec_repr(vt, link_fn))
+  if isinstance(type_spec, tuple):
+    return "(%s)" % ", ".join(get_type_spec_repr(t, link_fn) for t in type_spec)
+  if isinstance(type_spec, type):
+    return link_fn(type_spec)
+
+  # This line should be unreachable
+  raise TypeError("Unknown type: {}".format(type_spec))
 
 
 def make_dir(path):
