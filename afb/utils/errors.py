@@ -88,12 +88,25 @@ def validate_struct(type_spec, struct):
     return
 
   # `dict` case
-  if isinstance(type_spec, dict) and isinstance(struct, dict):
+  if isinstance(type_spec, dict):
     k_spec, v_spec = next(six.iteritems(type_spec))
-    for ks, vs in six.iteritems(struct):
-      validate_struct(k_spec, ks)
-      validate_struct(v_spec, vs)
-    return
+    if isinstance(struct, dict):
+      for ks, vs in six.iteritems(struct):
+        validate_struct(k_spec, ks)
+        validate_struct(v_spec, vs)
+      return
+    elif isinstance(struct, (list, tuple)):
+      valid = all((isinstance(pair, (list, tuple)) and len(pair) == 2)
+                  for pair in struct)
+      if not valid:
+        raise StructMismatchError("The input parameter for arguments of "
+                                  "nested `dict` must be either a `dict` or "
+                                  "a list/tuple of `(key_spec, value_spec)`. "
+                                  "Given: {}".format(struct))
+      for ks, vs in struct:
+        validate_struct(k_spec, ks)
+        validate_struct(v_spec, vs)
+      return
 
   # `tuple` case
   if isinstance(type_spec, tuple) and isinstance(struct, (list, tuple)):

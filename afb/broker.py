@@ -195,9 +195,16 @@ class Broker(object):
     def factory_doc_path_fn(key):
       return os.path.join("factories", "%s.md" % key)
 
+    def builtin_doc_path_fn(key):
+      return os.path.join("builtin", "%s.md" % key)
+
     for cls in self.classes:
       mfr = self.get_manufacturer(cls)
       docs.export_class_markdown(
-          mfr, export_dir, cls_dir_fn, cls_desc_name, factory_doc_path_fn)
+          mfr, export_dir, cls_dir_fn, cls_desc_name,
+          factory_doc_path_fn, builtin_doc_path_fn)
       docs.export_factories_markdown(
           mfr, export_dir, cls_dir_fn, cls_desc_name, factory_doc_path_fn)
+      docs.export_factories_markdown(
+          mfr, export_dir, cls_dir_fn, cls_desc_name, builtin_doc_path_fn,
+          builtin=True)

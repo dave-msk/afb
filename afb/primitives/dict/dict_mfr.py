@@ -16,7 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils.misc import create_mfr_with_builtin
+from afb.utils import misc
 from afb.primitives.dict import factories as fct
 
 _BUILTIN_FCT = {
@@ -25,4 +25,4 @@ _BUILTIN_FCT = {
 
 
 def create_dict_mfr():
-  return create_mfr_with_builtin(dict, _BUILTIN_FCT)
+  return misc.create_mfr_with_builtin(dict, _BUILTIN_FCT, keyword_mode=True)

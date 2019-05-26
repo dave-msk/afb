@@ -24,6 +24,7 @@ import sys
 
 from threading import RLock
 
+from afb import builtin
 from afb.utils import errors
 from afb.utils import types
 
@@ -159,13 +160,8 @@ class Manufacturer(object):
 
   def _init_builtin(self):
     target = "builtin"
-    self._register(
-        "from_config", self._from_config, {"config": str}, target=target)
-
-  # TODO: Add documentations
-  def _from_config(self, config):
-    params = self._broker.make(dict, {"load_config": {"config": config}})
-    return self._broker.make(self.cls, params)
+    for reg in builtin.get_registrants(self):
+      self._register(**reg, target=target)
 
   def _get_factory_spec(self, key):
     return self._builtin.get(key) or self._factories.get(key)
@@ -501,10 +497,15 @@ class Manufacturer(object):
     if isinstance(type_spec, list) and isinstance(nested, (list, tuple)):
       t = type_spec[0]
       return [self._get_struct(t, n) for n in nested]
-    if isinstance(type_spec, dict) and isinstance(nested, dict):
+
+    if isinstance(type_spec, dict):
       kt, vt = next(six.iteritems(type_spec))
-      return {self._get_struct(kt, kn): self._get_struct(vt, vn)
-              for kn, vn in six.iteritems(nested)}
+      if isinstance(nested, dict):
+        return {self._get_struct(kt, kn): self._get_struct(vt, vn)
+                for kn, vn in six.iteritems(nested)}
+      elif isinstance(nested, (list, tuple)):
+        return {self._get_struct(kt, kn): self._get_struct(vt, vn)
+                for kn, vn in nested}
     if isinstance(type_spec, tuple) and isinstance(nested, (list, tuple)):
       return tuple(self._get_struct(t, n) for t, n in zip(type_spec, nested))
     if isinstance(type_spec, type):

@@ -14,7 +14,29 @@ CONFIG_LOADER = {
 
 
 def get_load_config():
-  return load_config, {'config': str}
+  descriptions = {
+      "short": "Loads dictionary from config file.",
+      "long":
+          """The currently supported file format is YAML and JSON.
+          
+          The file format is determined by the file extension:
+          
+          - YAML: `.yaml`, `.yml`
+          - JSON: `.json`
+          
+          The config file must contain a representation that will be
+          deserialized into a single `dict`.
+          """
+  }
+
+  sig = {
+      "config": {
+          "type": str,
+          "description": "Path to configuration file containing a "
+                         "representation corresponding to a single `dict`."
+      }
+  }
+  return {"factory": load_config, "sig": sig, "descriptions": descriptions}
 
 
 def load_config(config):
