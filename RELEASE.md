@@ -1,9 +1,11 @@
 # Release 1.3
 ## Major Features And Improvements
 - `Manufacturer` now supports multi-level nested type specification.
+- **From 1.3.1:** `Broker` now includes builtin factories in the documentation generation.
 
 ## Bug Fixes and Other Changes
 - Included `Manufacturer`, `method` and `argument` information in error messages to help debugging.
+- **From 1.3.1:** Added tuple/list form to object spec for `dict`-nested type specs. The original dict-form did not take care of the non-hashability of an object spec (which is a `dict`).
 
 ## Thanks to our Contributors
 My sincere gratitude to the contributors:
