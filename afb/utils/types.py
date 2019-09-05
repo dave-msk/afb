@@ -17,9 +17,8 @@ def maybe_get_cls(maybe_obj, cls):
   if isinstance(obj, cls):
     return obj
 
-  raise TypeError("A `{}` or a function that accepts nothing and "
-                  "returns one is expected. Given: {}"
-                  .format(cls.__name__, maybe_obj))
+  raise TypeError("A `{}` or a zero-argument function that returns one is "
+                  "expected. Given: {}".format(cls.__name__, maybe_obj))
 
 
 def is_obj_spec(x):

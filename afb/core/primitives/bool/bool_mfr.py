@@ -16,27 +16,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
+from afb.utils.misc import create_mfr_with_builtin
 
-from afb.core import manufacturer as mfr_lib
-from afb.utils import keys
-
-
-def create_mfr(cls, fct_fn_dict, keyword_mode=False):
-  mfr = mfr_lib.Manufacturer(cls)
-  mfr.register_dict(fct_fn_dict, keyword_mode=keyword_mode)
-  return mfr
+_BUILTIN_FCT = {
+}
 
 
-def create_mfr_with_builtin(cls, fct_fn_dict, keyword_mode=False):
-  class BuiltinManufacturer(mfr_lib.Manufacturer):
-    def _init_builtin(self):
-      super(BuiltinManufacturer, self)._init_builtin()
-      for k, fn in six.iteritems(fct_fn_dict):
-        if keyword_mode:
-          kwargs = dict(fn(), target=keys.RegistryKeys.BUILTIN)
-          self._register(k, **kwargs)
-        else:
-          self._register(k, *fn(), target=keys.RegistryKeys.BUILTIN)
-
-  return BuiltinManufacturer(cls)
+def create_bool_mfr():
+  return create_mfr_with_builtin(bool, _BUILTIN_FCT)
