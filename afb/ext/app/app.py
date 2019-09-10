@@ -1,3 +1,17 @@
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -19,12 +33,14 @@ class App(object):
   def __init__(self,
                script_path,
                broker,
+               app_prefix="",
                basic_log_fmt=None):
     if not isinstance(broker, brk_lib.Broker) or not callable(broker):
       raise TypeError("`broker` must either be a `Broker` or a zero-argument "
                       "function that returns a `Broker`. Given: {}"
                       .format(broker))
     self._maybe_broker = broker
+    self._app_prefix = app_prefix
     self._script_name = os.path.basename(script_path)
     self._basic_log_fmt = gen_utils.val_or_default(
         basic_log_fmt,
@@ -52,7 +68,7 @@ class App(object):
     # 3. Create new broker that merges both
     broker = brk_lib.Broker()
     broker.merge("", user_broker)
-    broker.merge("afb/app", app_brk)
+    broker.merge(self._app_prefix, app_brk)
 
     return broker
 

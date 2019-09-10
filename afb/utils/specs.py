@@ -16,11 +16,20 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils.misc import create_mfr_with_builtin
+import six
 
-_BUILTIN_FCT = {
-}
+from afb.utils import errors
 
 
-def create_list_mfr():
-  return create_mfr_with_builtin(list, _BUILTIN_FCT)
+def type_spec_repr(type_spec):
+  errors.validate_type_spec(type_spec)
+  if isinstance(type_spec, list):
+    return "[{}]".format(type_spec_repr(type_spec[0]))
+  elif isinstance(type_spec, dict):
+    k, v = next(six.iteritems(type_spec))
+    return "{%s: %s}" % (type_spec_repr(k), type_spec_repr(v))
+  elif isinstance(type_spec, tuple):
+    return "({})".format(", ".join(type_spec))
+  # Here, `type_spec` has to be a type, otherwise an exception
+  # would have been thrown in the initialize validation.
+  return type_spec.__name__

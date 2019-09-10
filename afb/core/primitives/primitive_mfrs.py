@@ -16,11 +16,25 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils.misc import create_mfr_with_builtin
+import six
 
-_BUILTIN_FCT = {
+from afb.core.primitives.factories import dict_lib
+from afb.utils import misc
+
+
+_STATIC_FACTORIES = {
+    bool: {},
+    dict: {
+        "load_config": dict_lib.get_load_config,
+    },
+    float: {},
+    int: {},
+    list: {},
+    str: {},
+    tuple: {},
 }
 
 
-def create_float_mfr():
-  return create_mfr_with_builtin(float, _BUILTIN_FCT)
+def make_primitive_mfrs():
+  return [misc.create_mfr_with_static_factories(cls, cls_reg, keyword_mode=True)
+          for cls, cls_reg in six.iteritems(_STATIC_FACTORIES)]

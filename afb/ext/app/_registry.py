@@ -1,24 +1,52 @@
+# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ==============================================================================
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import six
+
 from afb.core import broker as brk_lib
-from afb.ext.app import job as job_lib
-from afb.ext.app import task as task_lib
-from afb.ext.app import values as val_lib
+from afb.ext.app import job
+from afb.ext.app import task
+from afb.ext.app import values
 
 
-REGISTRY = {
-    job_lib.Job: job_lib.get_factories,
-    task_lib.Task: task_lib.get_factories,
-    val_lib.Values: val_lib.get_factories,
+_REGISTRY = {
+    job.Job: {
+        "job": job.get_job,
+    },
+    task.Task: {},
+    values.Values: {
+        "enum/bool": values.make_enum_values(bool),
+        "enum/float": values.make_enum_values(float),
+        "enum/int": values.make_enum_values(int),
+        "enum/job": values.make_enum_values(job.Job),
+        "enum/str": values.make_enum_values(str),
+        "alg/concat": values.get_concat,
+        "alg/dict_lib/prod": values.get_product_in_dict,
+        "alg/dict_lib/zip": values.get_zipped_in_dict,
+        "alg/prod": values.get_product,
+        "alg/zip": values.get_zipped,
+    },
 }
 
 
-def create_broker():
+def make_broker():
   broker = brk_lib.Broker()
-  for cls, get_fcts_fn in REGISTRY.items():
-    fcts = get_fcts_fn()
-    for key, get_fct_fn in fcts.items():
-      broker.add_factory(cls, key, **get_fct_fn())
+  for cls, cls_reg in _REGISTRY.items():
+    [broker.add_factory(cls, k, **get_fct())
+     for k, get_fct in six.iteritems(cls_reg)]
   return broker

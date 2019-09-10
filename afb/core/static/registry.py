@@ -16,24 +16,18 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from afb.core.static import from_config
 
-def lazyprop(func):
-  """Decorator that makes a property lazy-evaluated.
+import six
 
-  Credits go to Aran-Frey on StackOverflow:
-  https://stackoverflow.com/questions/3012421/python-memoising-deferred-lookup-property-decorator
 
-  Args:
-    func: Zero-argument method to be decorated as lazy property.
+_STATIC_FACTORIES = {
+    "from_config": from_config.make_from_config,
+}
 
-  Returns:
-    Lazy property that takes value from `func`.
-  """
-  attr_name = "_lazy_" + func.__name__
 
-  @property
-  def _lazy_property(self):
-    if not hasattr(self, attr_name):
-      setattr(self, attr_name, func(self))
-    return getattr(self, attr_name)
-  return _lazy_property
+def make_static_factories(mfr):
+  regs = []
+  for key, make_fct in six.iteritems(_STATIC_FACTORIES):
+    regs.append(dict(key=key, **make_fct(mfr)))
+  return regs

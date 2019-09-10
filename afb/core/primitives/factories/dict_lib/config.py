@@ -25,7 +25,7 @@ def get_load_config():
           - JSON: `.json`
           
           The config file must contain a representation that will be
-          deserialized into a single `dict`.
+          deserialized into a single `dict_lib`.
           """,
   }
 
@@ -33,9 +33,10 @@ def get_load_config():
       "config": {
           "type": str,
           "description": "Path to configuration file containing a "
-                         "representation corresponding to a single `dict`.",
-      }
+                         "representation corresponding to a single `dict_lib`.",
+      },
   }
+
   return {"factory": load_config, "sig": sig, "descriptions": descriptions}
 
 

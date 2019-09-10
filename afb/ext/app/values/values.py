@@ -16,24 +16,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 
-def lazyprop(func):
-  """Decorator that makes a property lazy-evaluated.
 
-  Credits go to Aran-Frey on StackOverflow:
-  https://stackoverflow.com/questions/3012421/python-memoising-deferred-lookup-property-decorator
+class Values(object):
+  def make_iterator(self):
+    iterator = self._make_iterator()
+    if not isinstance(iterator, collections.Iterator):
+      raise TypeError("\"_make_iterator\" must return an Iterator. "
+                      "Given: {}".format(type(iterator)))
 
-  Args:
-    func: Zero-argument method to be decorated as lazy property.
+    return iterator
 
-  Returns:
-    Lazy property that takes value from `func`.
-  """
-  attr_name = "_lazy_" + func.__name__
-
-  @property
-  def _lazy_property(self):
-    if not hasattr(self, attr_name):
-      setattr(self, attr_name, func(self))
-    return getattr(self, attr_name)
-  return _lazy_property
+  def _make_iterator(self):
+    raise NotImplementedError("Must be implemented in descendants.")

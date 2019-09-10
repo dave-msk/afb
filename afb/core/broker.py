@@ -21,7 +21,7 @@ import six
 from threading import Lock
 
 from afb.core.manufacturer import Manufacturer
-from afb.core.primitives import get_primitives_mfrs
+from afb.core.primitives import make_primitive_mfrs
 from afb.utils import docs
 from afb.utils import types
 
@@ -61,7 +61,7 @@ class Broker(object):
 
   def _initialize(self):
     # Register manufacturers of the primitives
-    self.register_all(get_primitives_mfrs())
+    self.register_all(make_primitive_mfrs())
 
   @property
   def classes(self):
@@ -89,46 +89,46 @@ class Broker(object):
                       descriptions=descriptions,
                       force=force)
 
-  def merge(self, key, brk):
+  def merge(self, root, broker):
     """Merge all `Manufacturer`s from a `Broker`.
 
     This method merges all the `Manufacturer`s in the given `Broker` to the
-    managed ones. All the `Manufacturer`s in `brk` will be merged with `key`.
+    managed ones. All the `Manufacturer`s in `broker` will be merged with `key`.
 
     See docstring of `Broker.merge` and `Manufacturer.merge` for more details.
 
     Args:
-      key: A string that serves as the root of the factories from each
-        `Manufacturer` managed by `brk`. If None, the original method name
+      root: A string that serves as the root of the dict_lib from each
+        `Manufacturer` managed by `broker`. If None, the original method name
         will be used directly.
-      brk: A `Broker`, or a zero-argument function that returns one,
+      broker: A `Broker`, or a zero-argument function that returns one,
         whose `Manufacturer`s are to be merged.
 
     Raises:
       KeyError:
         - Any of the resulting factory keys has been registered.
       TypeError:
-        - `brk` is not a `Broker` nor a function which returns one.
+        - `broker` is not a `Broker` nor a function which returns one.
     """
-    self._merge(key, brk)
+    self._merge(root, broker)
 
-  def merge_mfr(self, key, mfr):
+  def merge_mfr(self, root, mfr):
     """Merge `Manufacturer` with the same output class.
 
-    This method merges the factories in the given `Manufacturer` to the managed
+    This method merges the dict_lib in the given `Manufacturer` to the managed
     one (an empty `Manufacturer` will be created and registered if no
-    correspondence is found). The method key of the newly added factories will
+    correspondence is found). The method key of the newly added dict_lib will
     have the form:
 
-      * "key/<method_name>"
+      * "root/<method_name>"
 
     See docstring of `Manufacturer.merge` for more details.
 
     Args:
-      key: A string that serves as the root of the factories from
+      root: A string that serves as the root of the dict_lib from
         `mfr`. If None, the original method name will be used directly.
       mfr: A `Manufacturer`, or a zero-argument function that returns one,
-        whose factories are to be merged.
+        whose dict_lib are to be merged.
 
     Raises:
       KeyError:
@@ -136,7 +136,7 @@ class Broker(object):
       TypeError:
         - `mfr` is not a `Manufacturer` nor a function which returns one.
     """
-    self._merge_mfr(key, mfr)
+    self._merge_mfr(root, mfr)
 
   def merge_mfrs(self, mfrs_dict):
     """Merge multiple manufacturers for each key.
@@ -150,21 +150,21 @@ class Broker(object):
       for mfr in mfrs:
         self.merge_mfr(key, mfr)
 
-  def _merge(self, key, brk):
-    brk = types.maybe_get_cls(brk, Broker)
-    key = types.maybe_get_cls(key, str)
-    classes = brk.classes
+  def _merge(self, root, broker):
+    broker = types.maybe_get_cls(broker, Broker)
+    root = types.maybe_get_cls(root, str)
+    classes = broker.classes
     for cls in classes:
-      mfr = brk.get_manufacturer(cls)
-      self.merge_mfr(key, mfr)
+      mfr = broker.get_manufacturer(cls)
+      self.merge_mfr(root, mfr)
 
-  def _merge_mfr(self, key, mfr):
+  def _merge_mfr(self, root, mfr):
     mfr = types.maybe_get_cls(mfr, Manufacturer)
     if mfr.cls not in self._manufacturers:
       self.register(Manufacturer(mfr.cls))
 
     _mfr = self._manufacturers[mfr.cls]
-    _mfr.merge(key=key, mfr=mfr)
+    _mfr.merge(root=root, mfr=mfr)
 
   def register(self, mfr):
     """TODO: Add docs"""
@@ -201,7 +201,7 @@ class Broker(object):
     if not isinstance(spec, dict) or len(spec) != 1:
       raise TypeError("`spec` must be either:"
                       "1. An instance of the target type.\n"
-                      "2. An object specification (singleton `dict` mapping a "
+                      "2. An object specification (singleton `dict_lib` mapping a "
                       "factory to its arguments for instantiation).\n"
                       "Target Type: {}\nGiven: {}".format(cls, spec))
 
@@ -221,10 +221,10 @@ class Broker(object):
     cls_dir_fn = cls_dir_fn or default_cls_dir_fn
 
     def factory_doc_path_fn(key):
-      return os.path.join("factories", "%s.md" % key)
+      return os.path.join("dict_lib", "%s.md" % key)
 
     def builtin_doc_path_fn(key):
-      return os.path.join("builtin", "%s.md" % key)
+      return os.path.join("static", "%s.md" % key)
 
     for cls in self.classes:
       mfr = self.get_manufacturer(cls)

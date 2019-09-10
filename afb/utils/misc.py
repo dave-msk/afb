@@ -28,15 +28,15 @@ def create_mfr(cls, fct_fn_dict, keyword_mode=False):
   return mfr
 
 
-def create_mfr_with_builtin(cls, fct_fn_dict, keyword_mode=False):
+def create_mfr_with_static_factories(cls, fct_fn_dict, keyword_mode=False):
   class BuiltinManufacturer(mfr_lib.Manufacturer):
-    def _init_builtin(self):
-      super(BuiltinManufacturer, self)._init_builtin()
+    def _init_static(self):
+      super(BuiltinManufacturer, self)._init_static()
       for k, fn in six.iteritems(fct_fn_dict):
         if keyword_mode:
-          kwargs = dict(fn(), target=keys.RegistryKeys.BUILTIN)
+          kwargs = dict(fn(), factory_type=keys.FactoryType.STATIC)
           self._register(k, **kwargs)
         else:
-          self._register(k, *fn(), target=keys.RegistryKeys.BUILTIN)
+          self._register(k, *fn(), factory_type=keys.FactoryType.STATIC)
 
   return BuiltinManufacturer(cls)

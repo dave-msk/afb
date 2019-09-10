@@ -16,11 +16,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils.misc import create_mfr_with_builtin
+from afb.core.primitives.factories import dict_lib
 
-_BUILTIN_FCT = {
-}
-
-
-def create_str_mfr():
-  return create_mfr_with_builtin(str, _BUILTIN_FCT)
+del absolute_import
+del division
+del print_function

@@ -87,7 +87,7 @@ def validate_struct(type_spec, struct):
       validate_struct(type_spec[0], s)
     return
 
-  # `dict` case
+  # `dict_lib` case
   if isinstance(type_spec, dict):
     k_spec, v_spec = next(six.iteritems(type_spec))
     if isinstance(struct, dict):
@@ -100,7 +100,7 @@ def validate_struct(type_spec, struct):
                   for pair in struct)
       if not valid:
         raise StructMismatchError("The input parameter for arguments of "
-                                  "nested `dict` must be either a `dict` or "
+                                  "nested `dict_lib` must be either a `dict_lib` or "
                                   "a list/tuple of `(key_spec, value_spec)`. "
                                   "Given: {}".format(struct))
       for ks, vs in struct:
@@ -128,7 +128,7 @@ def validate_struct(type_spec, struct):
     raise TypeError("The input must be one of the following:\n"
                     "1. None; \n"
                     "2. An instance of expected type; \n"
-                    "3. An object specification. (singleton `dict` mapping a "
+                    "3. An object specification. (singleton `dict_lib` mapping a "
                     "factory to its arguments for instantiation)\n"
                     "Expected Type: {}\nGiven: {}".format(type_spec, struct))
 
@@ -155,7 +155,7 @@ def validate_type_spec(type_spec):
   if isinstance(type_spec, type):
     return
   raise ValueError("The type specification must be either of the following:\n"
-                   "1. Singleton `dict` where the key and value are both "
+                   "1. Singleton `dict_lib` where the key and value are both "
                    "type specifications;\n"
                    "2. Singleton `list`, where the content is a "
                    "type specification; \n"

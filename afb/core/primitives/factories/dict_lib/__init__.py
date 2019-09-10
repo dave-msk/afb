@@ -16,13 +16,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils import misc
-from afb.core.primitives.dict import factories as fcts
+from afb.core.primitives.factories.dict_lib.config import get_load_config
 
-_BUILTIN_FCT = {
-    "load_config": fcts.config.get_load_config,
-}
-
-
-def create_dict_mfr():
-  return misc.create_mfr_with_builtin(dict, _BUILTIN_FCT, keyword_mode=True)
+del absolute_import
+del division
+del print_function
