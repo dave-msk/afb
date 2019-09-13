@@ -16,11 +16,15 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from afb.ext.app import tmpl
+
 from afb.ext.app.job.job import Job
 from afb.ext.app.task.task import Task
 from afb.ext.app.values.values import Values
 from afb.ext.app.app import App
+
 from afb.ext.app._registry import make_broker
+
 
 del absolute_import
 del division

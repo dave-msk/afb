@@ -18,6 +18,7 @@ from __future__ import print_function
 
 import copy
 import inspect
+import logging
 import os
 import six
 import sys
@@ -33,10 +34,10 @@ from afb.utils import types
 class Manufacturer(object):
   """An abstract factory of a class.
 
-  A manufacturer contains dict_lib for creating objects of a single class.
+  A manufacturer contains factories for creating objects of a single class.
   It does not create the object directly. Rather, it delegates the object
-  creation requests to the registered dict_lib. The arguments are first
-  transformed to a kwargs dict_lib according to the signature of the specified
+  creation requests to the registered factories. The arguments are first
+  transformed to a kwargs dict according to the signature of the specified
   factory, after which the factory is called.
 
   An object can be created by calling the `make` method. This method accepts
@@ -85,7 +86,7 @@ class Manufacturer(object):
   ```
 
   In order to allow the manufacturers to prepare objects required for the
-  dict_lib through other manufacturers, a broker is required.
+  factories through other manufacturers, a broker is required.
 
   ```python
   # Define broker
@@ -153,12 +154,18 @@ class Manufacturer(object):
       self._default = method
 
   @property
-  def factories(self):
+  def dynamic_factories(self):
     return copy.deepcopy(self._dynamic)
 
   @property
   def static_factories(self):
     return copy.deepcopy(self._static)
+
+  @property
+  def factories(self):
+    fcts = self.dynamic_factories
+    fcts.update(self.static_factories)
+    return fcts
 
   def has_method(self, key):
     return key in self._static or key in self._dynamic
@@ -173,18 +180,18 @@ class Manufacturer(object):
   def merge(self, root, mfr):
     """Merge another manufacturer of the same type.
 
-    This method registers all the dynamic dict_lib from the given Manufacturer.
-    The resulting key of the merged dict_lib will have the following form:
+    This method registers all the factories from the given Manufacturer.
+    The resulting key of the merged factories will have the following form:
 
       * "root/<method_name>"
 
-    This allows convenient grouping of dict_lib by context, without the need
+    This allows convenient grouping of factories by context, without the need
     to hard-code the path-like key at the time of registration. If `key` is
     `None`, the original method name is used.
 
     Args:
-      root: A string that serves as the root of the dynamic dict_lib
-        from `mfr`. If empty, the original method name will be used directly.
+      root: A string that serves as the root of the factories from `mfr`.
+        If empty, the original method name will be used directly.
       mfr: `Manufacturer` or a zero-argument function that returns one.
 
     Raises:
@@ -204,12 +211,14 @@ class Manufacturer(object):
     self._validate_merge_request(root, mfr)
     self._merge(root, mfr)
 
-  def merge_all(self, mfr_dict):
+  def merge_all(self, mfr_dict, force=False):
     """Merges multiple manufacturers.
 
     Args:
       mfr_dict: A dictionary mapping keys to `Manufacturer`s or zero-argument
-      functions where each returns a `Manufacturer`.
+        functions where each returns a `Manufacturer`.
+      force: If `True`, overwrites the existing factory (if any). If `False`,
+        raises ValueError if `key` is already registered. Defaults to `False`.
 
     Raises:
       KeyError:
@@ -222,21 +231,22 @@ class Manufacturer(object):
     mfr_dict_validated = {}
     for root, mfr in six.iteritems(mfr_dict):
       mfr = types.maybe_get_cls(mfr, Manufacturer)
-      self._validate_merge_request(root, mfr)
+      self._validate_merge_request(root, mfr, force=force)
       mfr_dict_validated[root] = mfr
 
     for root, mfr in six.iteritems(mfr_dict_validated):
-      self._merge(root, mfr)
+      self._merge(root, mfr, force=force)
 
-  def _merge(self, root, mfr):
-    factories = mfr.factories
+  def _merge(self, root, mfr, force=False):
+    factories = mfr.dynamic_factories
     for key, spec in six.iteritems(factories):
       key = _merged_name(root, key)
       self.register(key=key,
                     factory=spec["fn"],
                     sig=spec["sig"],
                     params=spec["params"],
-                    descriptions=spec["descriptions"])
+                    descriptions=spec["descriptions"],
+                    force=force)
 
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
@@ -254,26 +264,26 @@ class Manufacturer(object):
     Args:
       key: A string key that identifies the factory.
       factory: The factory to be registered.
-      sig: The signature of the input parameters. It is a dict_lib mapping each
+      sig: The signature of the input parameters. It is a dict mapping each
         argument of factory to its expected type.
       params: (Optional) Default parameters for this factory.
       descriptions: (Optional) Descriptions of this factory. If provided, it
         must specifies the short description keyed by "short". A long
         description keyed by "long" can optionally be included.
       force: If `True`, overwrites the existing factory (if any). If `False`,
-        raise ValueError if `key` is already registered. Defaults to `False`.
+        raises ValueError if `key` is already registered. Defaults to `False`.
 
     Raises:
       ValueError:
         1. `factory` is not a callable.
         2. The parameter keywords of `factory` does not match the keys of `sig`.
         3. `key` is already registered when `force` is `False`.
-        4. `descriptions` is not a `dict_lib` with short description specified.
+        4. `descriptions` is not a `dict` with short description specified.
         5. `descriptions` contains any keys not from `("short", "long")`.
       TypeError:
         1. `key` is not a string.
-        2. `sig` is not a dict_lib with string keys.
-        3. `params` is not a dict_lib with string keys.
+        2. `sig` is not a dict with string keys.
+        3. `params` is not a dict with string keys.
         4. `descriptions` contains non-string values.
     """
     self._register(key,
@@ -284,12 +294,12 @@ class Manufacturer(object):
                    force=force)
 
   def register_dict(self, factories_fn_dict, keyword_mode=False):
-    """Registers dict_lib from dictionary.
+    """Registers factories from dictionary.
 
-    This method allows a dictionary of dict_lib to be registered at once.
+    This method allows a dictionary of factories to be registered at once.
     The argument is expected to be a dictionary that maps the method name
-    for the factory to a zero-argument function that returns either
-    a tuple in non-keyword mode:
+    for the factory to a zero-argument function returns either a tuple in
+    non-keyword mode:
 
         (factory, signature, default_params (optional), descriptions (optional))
 
@@ -301,13 +311,13 @@ class Manufacturer(object):
          "descriptions": descriptions}  # optional
 
     A typical pattern one would encounter is to have a dictionary as a registry
-    to manage a group of dict_lib as "plugin"s, so that whenever a new
+    to manage a group of factories as "plugin"s, so that whenever a new
     factory is implemented it can be made available for the manufacturer to
     call by adding it in the dictionary. For example:
 
     In `registry.py`:
     ```python
-    from . import dict_lib as fct
+    from . import factories as fct
 
     REGISTRY = {
       "create": fct.create.get_create,
@@ -315,7 +325,7 @@ class Manufacturer(object):
     }
     ```
 
-    whereas in `dict_lib/create.py`:
+    whereas in `factories/create.py`:
     ```python
 
     def create(arg_1, arg_2, arg_3=True):
@@ -331,7 +341,7 @@ class Manufacturer(object):
       return create, sig, {"arg_1": "Hello World!", "arg_2": [1, -1, 0]}
     ```
 
-    and in `dict_lib/load.py`:
+    and in `factories/load.py`:
     ```python
 
     def load(filename, mode):
@@ -350,7 +360,7 @@ class Manufacturer(object):
 
     Args:
       factories_fn_dict: A dictionary that maps a method name to a zero-argument
-      function that returns:
+        function that returns:
 
         * Non-keyword mode - A tuple:
 
@@ -397,9 +407,9 @@ class Manufacturer(object):
 
     if not isinstance(sig, dict):
       raise self._raise_error(TypeError,
-                              "Method: {}\n`sig` must be a dict_lib mapping "
+                              "Method: {}\n`sig` must be a dict mapping "
                               "factory arguments to their corresponding type "
-                              "specification or `dict_lib` with type "
+                              "specification or `dict` with type "
                               "specification and description, keyed by "
                               "\"type\" and \"description\" respectively."
                               .format(key))
@@ -534,7 +544,7 @@ class Manufacturer(object):
     # This line should be unreachable.
     raise errors.StructMismatchError()
 
-  def _validate_merge_request(self, key, mfr):
+  def _validate_merge_request(self, key, mfr, force=False):
     if not isinstance(key, str):
       raise self._raise_error(TypeError,
                               "`key` must be a `str`. Given: {}".format(key))
@@ -547,14 +557,17 @@ class Manufacturer(object):
       raise self._raise_error(TypeError,
                               "The output class of `mfr` must be a subclass of "
                               "{}, given: {}".format(self.cls, mfr.cls))
-    factories = mfr.factories
+    factories = mfr.dynamic_factories
     merged_names = set(_merged_name(key, n) for n in factories)
     collisions = merged_names.intersection(self._dynamic)
     if collisions:
-      raise self._raise_error(KeyError,
-                              "Method key conflicts occurred: {}. "
-                              "Please use another key for merge instead"
-                              .format(sorted(collisions)))
+      if force:
+        pass  # TODO: Give warning
+      else:
+        raise self._raise_error(KeyError,
+                                "Method key conflicts occurred: {}. "
+                                "Please use another key for merge instead"
+                                .format(sorted(collisions)))
 
   def _wrap_error(self, fn, prefix=None, suffix=None, key=None):
     try:
@@ -600,7 +613,7 @@ def _normalized_factory_descriptions(desc, method):
   if (not isinstance(desc, dict)) or \
      ("short" not in desc) or \
      (set(desc) - valid_keys):
-    raise ValueError("The factory description must either be `None` or a `dict_lib`"
+    raise ValueError("The factory description must either be `None` or a `dict`"
                      " with the short description keyed as by \"short\" "
                      "included. A long description keyed by \"long\" can be "
                      "optionally provided.\n"

@@ -30,8 +30,8 @@ def export_class_markdown(mfr,
   cls = mfr.cls
   cls_name = cls.__qualname__
   cls_doc = inspect.cleandoc(cls.__doc__ or "")
-  factories = mfr.factories
-  builtins = mfr._builtin  # pylint: disable=protected-access
+  dynamic_fcts = mfr.dynamic_factories
+  static_fcts = mfr.static_factories
 
   def create_format_list_entry_fn(path_fn):
     def format_factory_list_entry(key, doc):
@@ -45,13 +45,13 @@ def export_class_markdown(mfr,
   description = "## Description\n\n%s" % cls_doc
   format_factory_list_entry = create_format_list_entry_fn(factory_doc_path_fn)
   factory_doc_list = ["  - %s" % format_factory_list_entry(k, d)
-                      for k, d in sorted(six.iteritems(factories))]
+                      for k, d in sorted(six.iteritems(dynamic_fcts))]
   factory_doc_list_str = "\n".join(factory_doc_list)
   factories_doc = "## Factories\n\n%s\n" % factory_doc_list_str
 
   format_builtin_list_entry = create_format_list_entry_fn(builtin_doc_path_fn)
   builtins_doc_list = ["  - %s" % format_builtin_list_entry(k, d)
-                       for k, d in sorted(six.iteritems(builtins))]
+                       for k, d in sorted(six.iteritems(static_fcts))]
   builtins_doc_list_str = "\n".join(builtins_doc_list)
   builtins_doc = "## Builtin\n\n%s\n" % builtins_doc_list_str
 
@@ -68,11 +68,11 @@ def export_factories_markdown(mfr,
                               cls_dir_fn,
                               cls_desc_name,
                               factory_doc_path_fn,
-                              builtin=False):
+                              static=False):
   cls = mfr.cls
   cls_dir = cls_dir_fn(cls)
   cls_name = cls.__qualname__
-  factories = mfr._builtin if builtin else mfr.factories  # pylint: disable=protected-access
+  factories = mfr.static_factories if static else mfr.dynamic_factories
 
   for k, entry in six.iteritems(factories):
     title = "# %s - `%s`" % (cls_name, k)

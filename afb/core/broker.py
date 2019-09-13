@@ -98,7 +98,7 @@ class Broker(object):
     See docstring of `Broker.merge` and `Manufacturer.merge` for more details.
 
     Args:
-      root: A string that serves as the root of the dict_lib from each
+      root: A string that serves as the root of the factories from each
         `Manufacturer` managed by `broker`. If None, the original method name
         will be used directly.
       broker: A `Broker`, or a zero-argument function that returns one,
@@ -115,9 +115,9 @@ class Broker(object):
   def merge_mfr(self, root, mfr):
     """Merge `Manufacturer` with the same output class.
 
-    This method merges the dict_lib in the given `Manufacturer` to the managed
+    This method merges the factories in the given `Manufacturer` to the managed
     one (an empty `Manufacturer` will be created and registered if no
-    correspondence is found). The method key of the newly added dict_lib will
+    correspondence is found). The method key of the newly added factories will
     have the form:
 
       * "root/<method_name>"
@@ -125,10 +125,10 @@ class Broker(object):
     See docstring of `Manufacturer.merge` for more details.
 
     Args:
-      root: A string that serves as the root of the dict_lib from
+      root: A string that serves as the root of the factories from
         `mfr`. If None, the original method name will be used directly.
       mfr: A `Manufacturer`, or a zero-argument function that returns one,
-        whose dict_lib are to be merged.
+        whose factories are to be merged.
 
     Raises:
       KeyError:
@@ -201,7 +201,7 @@ class Broker(object):
     if not isinstance(spec, dict) or len(spec) != 1:
       raise TypeError("`spec` must be either:"
                       "1. An instance of the target type.\n"
-                      "2. An object specification (singleton `dict_lib` mapping a "
+                      "2. An object specification (singleton `dict` mapping a "
                       "factory to its arguments for instantiation).\n"
                       "Target Type: {}\nGiven: {}".format(cls, spec))
 
@@ -221,7 +221,7 @@ class Broker(object):
     cls_dir_fn = cls_dir_fn or default_cls_dir_fn
 
     def factory_doc_path_fn(key):
-      return os.path.join("dict_lib", "%s.md" % key)
+      return os.path.join("factories", "%s.md" % key)
 
     def builtin_doc_path_fn(key):
       return os.path.join("static", "%s.md" % key)
@@ -235,7 +235,7 @@ class Broker(object):
           mfr, export_dir, cls_dir_fn, cls_desc_name, factory_doc_path_fn)
       docs.export_factories_markdown(
           mfr, export_dir, cls_dir_fn, cls_desc_name, builtin_doc_path_fn,
-          builtin=True)
+          static=True)
 
   def _add_factory(self,
                    cls,

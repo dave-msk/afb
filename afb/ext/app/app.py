@@ -35,7 +35,7 @@ class App(object):
                broker,
                app_prefix="",
                basic_log_fmt=None):
-    if not isinstance(broker, brk_lib.Broker) or not callable(broker):
+    if not isinstance(broker, brk_lib.Broker) and not callable(broker):
       raise TypeError("`broker` must either be a `Broker` or a zero-argument "
                       "function that returns a `Broker`. Given: {}"
                       .format(broker))
@@ -63,7 +63,7 @@ class App(object):
                       .format(user_broker))
 
     # 2. Create app-specific `Broker`.
-    app_brk = _registry.create_broker()
+    app_brk = _registry.make_broker()
 
     # 3. Create new broker that merges both
     broker = brk_lib.Broker()
@@ -112,12 +112,13 @@ class App(object):
     if run_config is None: return
     # 1. Create object specs for `Job`s
     # TODO: Try catch
-    job_specs = self._broker.make(val_lib.Values,
-                                  {"from_config": {"config": run_config}})
+    job_spec_values = self._broker.make(
+        val_lib.Values, {"from_config": {"config": run_config}})
 
     # 2. Instantiate `Job`s from object specs.
     # TODO: Try catch
     jobs = []
+    job_specs = job_spec_values.make_iterator()
     for spec in job_specs:
       job = self._broker.make(job_lib.Job, spec)
       jobs.append(job)

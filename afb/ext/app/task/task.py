@@ -16,10 +16,50 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import inspect
+import logging
+import threading
+
 
 class Task(object):
+  def __init__(self, name):
+    self._name = name
+
+  @property
+  def name(self):
+    return self._name
+
   def run(self, *args, **kwargs):
-    self._run(*args, **kwargs)
+    sig = inspect.signature(self._run)
+    if "exit_ctx" in sig.parameters:
+      with ExitContext() as exit_ctx:
+        kwargs["exit_ctx"] = exit_ctx
+        self._run(*args, **kwargs)
+    else:
+      self._run(*args, **kwargs)
 
   def _run(self, *args, **kwargs):
     raise NotImplementedError("Undefined task logic.")
+
+  def _get_logger(self):
+    return logging.getLogger(self.name)
+
+
+class ExitContext(object):
+  def __init__(self):
+    self._cleanup_fns = []
+    self._lock = threading.Lock()
+
+  def add_cleanup_fn(self, fn):
+    if not callable(fn) or inspect.signature(fn).parameters:
+      raise ValueError("`fn` must be a zero-argument function.")
+    with self._lock:
+      self._cleanup_fns.append(fn)
+
+  def __enter__(self):
+    return self
+
+  def __exit__(self, exc_type, exc_val, exc_tb):
+    with self._lock:
+      [f() for f in self._cleanup_fns]
+      self._cleanup_fns.clear()
