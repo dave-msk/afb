@@ -26,7 +26,7 @@ def export_class_markdown(mfr,
                           cls_dir_fn,
                           cls_desc_name,
                           factory_doc_path_fn,
-                          builtin_doc_path_fn):
+                          static_doc_path_fn):
   cls = mfr.cls
   cls_name = cls.__qualname__
   cls_doc = inspect.cleandoc(cls.__doc__ or "")
@@ -49,18 +49,18 @@ def export_class_markdown(mfr,
   factory_doc_list_str = "\n".join(factory_doc_list)
   factories_doc = "## Factories\n\n%s\n" % factory_doc_list_str
 
-  format_builtin_list_entry = create_format_list_entry_fn(builtin_doc_path_fn)
-  builtins_doc_list = ["  - %s" % format_builtin_list_entry(k, d)
+  format_static_list_entry = create_format_list_entry_fn(static_doc_path_fn)
+  statics_doc_list = ["  - %s" % format_static_list_entry(k, d)
                        for k, d in sorted(six.iteritems(static_fcts))]
-  builtins_doc_list_str = "\n".join(builtins_doc_list)
-  builtins_doc = "## Builtin\n\n%s\n" % builtins_doc_list_str
+  statics_doc_list_str = "\n".join(statics_doc_list)
+  statics_doc = "## Static\n\n%s\n" % statics_doc_list_str
 
   cls_desc_path = os.path.join(export_dir,
                                cls_dir_fn(cls),
                                "%s.md" % cls_desc_name)
   make_dir(cls_desc_path)
   with open(cls_desc_path, 'w') as f:
-    f.write("\n\n".join((title, description, factories_doc, builtins_doc)))
+    f.write("\n\n".join((title, description, factories_doc, statics_doc)))
 
 
 def export_factories_markdown(mfr,

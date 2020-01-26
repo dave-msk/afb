@@ -29,9 +29,9 @@ def create_mfr(cls, fct_fn_dict, keyword_mode=False):
 
 
 def create_mfr_with_static_factories(cls, fct_fn_dict, keyword_mode=False):
-  class BuiltinManufacturer(mfr_lib.Manufacturer):
+  class StaticManufacturer(mfr_lib.Manufacturer):
     def _init_static(self):
-      super(BuiltinManufacturer, self)._init_static()
+      super(StaticManufacturer, self)._init_static()
       for k, fn in six.iteritems(fct_fn_dict):
         if keyword_mode:
           kwargs = dict(fn(), factory_type=keys.FactoryType.STATIC)
@@ -39,4 +39,4 @@ def create_mfr_with_static_factories(cls, fct_fn_dict, keyword_mode=False):
         else:
           self._register(k, *fn(), factory_type=keys.FactoryType.STATIC)
 
-  return BuiltinManufacturer(cls)
+  return StaticManufacturer(cls)
