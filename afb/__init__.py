@@ -18,7 +18,6 @@ from __future__ import print_function
 
 from afb.core.manufacturer import Manufacturer
 from afb.core.broker import Broker
-from afb.ext import app
 from afb.utils import create_mfr
 
 del absolute_import
