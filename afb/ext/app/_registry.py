@@ -46,7 +46,7 @@ _REGISTRY = {
 
 def make_broker():
   broker = brk_lib.Broker()
-  for cls, cls_reg in _REGISTRY.items():
+  for cls, cls_reg in six.iteritems(_REGISTRY):
     [broker.add_factory(cls, k, **get_fct())
      for k, get_fct in six.iteritems(cls_reg)]
   return broker

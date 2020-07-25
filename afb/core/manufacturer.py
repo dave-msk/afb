@@ -20,10 +20,10 @@ import copy
 import inspect
 import logging
 import os
-import six
 import sys
+import threading
 
-from threading import RLock
+import six
 
 from afb.core import static
 from afb.utils import errors
@@ -128,7 +128,7 @@ class Manufacturer(object):
       cls: The intended output class.
     """
     self._cls = cls
-    self._lock = RLock()
+    self._lock = threading.RLock()
     self._broker = None
     self._default = None
 
