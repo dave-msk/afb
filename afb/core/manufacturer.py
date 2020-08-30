@@ -597,7 +597,7 @@ def _format_signature(f, sig):
     del summary[inspect.Parameter.VAR_POSITIONAL]
 
   has_varkw = len(summary.pop(inspect.Parameter.VAR_KEYWORD, "")) > 0
-  fargs = functools.reduce(lambda l, r: l.union(r), fparams.values(), set())
+  fargs = functools.reduce(lambda l, r: l.union(r), summary.values(), set())
 
   rqd_args, norm_sig = set(), {}
   for arg, param_or_spec in sig.items():
