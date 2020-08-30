@@ -1,0 +1,9 @@
+setup.cfg
+setup.py
+test_*
+*__pycache__*
+*.pyc
+.idea/
+build/
+dist/
+*.egg-info
