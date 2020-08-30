@@ -17,6 +17,7 @@ from __future__ import division
 from __future__ import print_function
 
 import copy
+import functools
 import inspect
 import logging
 import os
@@ -412,33 +413,20 @@ class Manufacturer(object):
                               "specification or `dict` with type "
                               "specification and description, keyed by "
                               "\"type\" and \"description\" respectively."
-                              .format(key))
+                              .format(key))  # TODO: Update this
 
     params = params or {}
     self._wrap_error(
         lambda: errors.validate_kwargs(params, "params"), key=key)
 
+    descriptions = descriptions or factory.__doc__
     descriptions = self._wrap_error(
         lambda: _normalized_factory_descriptions(descriptions, key),
         key=key)
 
-    # Check if `sig` contains all required but no invalid arguments.
-    rqd_args, all_args = fn_args(factory)
-    miss_args = rqd_args - set(sig)
-    if miss_args:
-      raise self._raise_error(ValueError,
-                              "Method: {}\nMissing required arguments from "
-                              "`sig`. \nRequired: {}\nGiven: {}\nMissing: {}"
-                              .format(key,
-                                      sorted(rqd_args),
-                                      sorted(sig),
-                                      sorted(miss_args)))
-    self._wrap_error(lambda: errors.validate_args(sig, all_args), key=key)
-    self._wrap_error(lambda: errors.validate_args(params, sig), key=key)
-
-    norm_sig = {k: self._wrap_error(lambda: _normalized_sig_entry(s),
-                                    key="method")
-                for k, s in six.iteritems(sig)}
+    # Normalize signature and determine required arguments.
+    rqd_args, norm_sig = self._wrap_error(
+        lambda: _format_signature(factory, sig), key=key)
 
     # Register factory.
     with self._lock:
@@ -586,11 +574,50 @@ class Manufacturer(object):
     raise err_type(message)
 
 
-def fn_args(func):
-  sig = inspect.signature(func)
-  required = {k for k, v in six.iteritems(sig.parameters)
-              if v.default == inspect.Parameter.empty}
-  return required, set(sig.parameters.keys())
+def _format_signature(f, sig):
+  fsig = inspect.signature(f)
+  fparams = fsig.parameters
+
+  frqd = {k for k, v in fparams.items() if v.default == inspect.Parameter.empty}
+  miss_rqds = frqd - set(sig)
+  if miss_rqds:
+    raise ValueError("Missing required arguments from `sig`.\n"
+                     "Required: {}\nGiven: {}\nMissing: {}"
+                     .format(sorted(frqd),
+                             sorted(sig),
+                             sorted(miss_rqds)))
+
+  summary = {}
+  for k, p in fparams.items(): summary.setdefault(p.kind, set()).add(k)
+  if inspect.Parameter.POSITIONAL_ONLY in summary:
+    raise ValueError("...")  # Not supported
+
+  if inspect.Parameter.VAR_POSITIONAL in summary:
+    # TODO: Give warning that variant positionals will not be used.
+    del summary[inspect.Parameter.VAR_POSITIONAL]
+
+  has_varkw = len(summary.pop(inspect.Parameter.VAR_KEYWORD, "")) > 0
+  fargs = functools.reduce(lambda l, r: l.union(r), fparams.values(), set())
+
+  rqd_args, norm_sig = set(), {}
+  for arg, param_or_spec in sig.items():
+    if arg not in fargs and not has_varkw:
+      raise KeyError("")  # No such argument
+    param = _normalize_param(param_or_spec)
+    norm_sig[arg] = param
+    if arg in frqd or param.pop("forced", False):
+      rqd_args.add(arg)
+
+  return rqd_args, norm_sig
+
+
+def _normalize_param(param_or_spec):
+  param = param_or_spec
+  if not _is_param_format(param):
+    param = {"type": param, "description": ""}
+  errors.validate_type_spec(param["type"])
+
+  return param
 
 
 def _merged_name(root, name):
@@ -598,21 +625,24 @@ def _merged_name(root, name):
   return os.path.join(root, name).replace("\\", "/")
 
 
-def _normalized_sig_entry(s):
-  valid_keys = {"type", "description"}
-  if not (isinstance(s, dict) and set(s) == valid_keys):
-    s = {"type": s, "description": ""}
-  type_spec = s["type"]
-  errors.validate_type_spec(type_spec)
-  return s
+def _is_param_format(spec):
+  if isinstance(spec, dict):
+    unknown_keys = set(spec) - {"type", "description", "forced"}
+    return "type" in spec and not unknown_keys
+  return False
 
 
 def _normalized_factory_descriptions(desc, method):
+  if isinstance(desc, str):
+    lines = inspect.cleandoc(desc).split("\n")
+    return {"short": lines[0], "long": "\n".join(lines[1:]).strip()}
+
   valid_keys = {"short", "long"}
   desc = desc or {"short": ""}
   if (not isinstance(desc, dict)) or \
      ("short" not in desc) or \
      (set(desc) - valid_keys):
+    # TODO: Update this
     raise ValueError("The factory description must either be `None` or a `dict`"
                      " with the short description keyed as by \"short\" "
                      "included. A long description keyed by \"long\" can be "
