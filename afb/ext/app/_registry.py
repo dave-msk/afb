@@ -16,8 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
-
 from afb.core import broker as brk_lib
 from afb.ext.app import job
 from afb.ext.app import task
@@ -46,7 +44,7 @@ _REGISTRY = {
 
 def make_broker():
   broker = brk_lib.Broker()
-  for cls, cls_reg in six.iteritems(_REGISTRY):
+  for cls, cls_reg in _REGISTRY.items():
     [broker.add_factory(cls, k, **get_fct())
-     for k, get_fct in six.iteritems(cls_reg)]
+     for k, get_fct in cls_reg.items()]
   return broker

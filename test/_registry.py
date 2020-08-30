@@ -2,8 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
-
 import afb
 
 from test import tasks
@@ -30,6 +28,6 @@ _REGISTRY = {
 
 def make_broker():
   broker = afb.Broker()
-  for cls, reg in six.iteritems(_REGISTRY):
-    [broker.add_factory(cls, k, **fn()) for k, fn in six.iteritems(reg)]
+  for cls, reg in _REGISTRY.items():
+    [broker.add_factory(cls, k, **fn()) for k, fn in reg.items()]
   return broker

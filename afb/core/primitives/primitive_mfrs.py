@@ -16,8 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
-
 from afb.core.primitives.factories import dict_lib
 from afb.utils import misc
 
@@ -37,4 +35,4 @@ _STATIC_FACTORIES = {
 
 def make_primitive_mfrs():
   return [misc.create_mfr_with_static_factories(cls, cls_reg, keyword_mode=True)
-          for cls, cls_reg in six.iteritems(_STATIC_FACTORIES)]
+          for cls, cls_reg in _STATIC_FACTORIES.items()]

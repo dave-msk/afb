@@ -16,8 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
-
 from afb.core import manufacturer as mfr_lib
 from afb.utils import keys
 
@@ -32,7 +30,7 @@ def create_mfr_with_static_factories(cls, fct_fn_dict, keyword_mode=False):
   class StaticManufacturer(mfr_lib.Manufacturer):
     def _init_static(self):
       super(StaticManufacturer, self)._init_static()
-      for k, fn in six.iteritems(fct_fn_dict):
+      for k, fn in fct_fn_dict.items():
         if keyword_mode:
           kwargs = dict(fn(), factory_type=keys.FactoryType.STATIC)
           self._register(k, **kwargs)

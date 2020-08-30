@@ -17,7 +17,6 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import six
 from threading import Lock
 
 from afb.core.manufacturer import Manufacturer
@@ -146,7 +145,7 @@ class Broker(object):
         `Manufacturer`s, or zero-argument functions where each returns one,
          to be merged. The key will be used across the iterable.
     """
-    for key, mfrs in six.iteritems(mfrs_dict):
+    for key, mfrs in mfrs_dict.items():
       for mfr in mfrs:
         self.merge_mfr(key, mfr)
 
@@ -205,7 +204,7 @@ class Broker(object):
                       "factory to its arguments for instantiation).\n"
                       "Target Type: {}\nGiven: {}".format(cls, spec))
 
-    method, params = next(six.iteritems(spec))
+    method, params = next(iter(spec.items()))
     if cls is dict and not mfr.has_method(method):
       return spec
     return mfr.make(method=method, params=params)

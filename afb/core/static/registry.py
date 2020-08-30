@@ -18,8 +18,6 @@ from __future__ import print_function
 
 from afb.core.static import from_config
 
-import six
-
 
 _STATIC_FACTORIES = {
     "from_config": from_config.make_from_config,
@@ -28,6 +26,6 @@ _STATIC_FACTORIES = {
 
 def make_static_factories(mfr):
   regs = []
-  for key, make_fct in six.iteritems(_STATIC_FACTORIES):
+  for key, make_fct in _STATIC_FACTORIES.items():
     regs.append(dict(key=key, **make_fct(mfr)))
   return regs
