@@ -17,7 +17,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-from threading import Lock
+from threading import RLock
 
 from afb.core.manufacturer import Manufacturer
 from afb.core.primitives import make_primitive_mfrs
@@ -52,7 +52,7 @@ class Broker(object):
   """
 
   def __init__(self):
-    self._lock = Lock()
+    self._lock = RLock()
 
     # Initialize broker
     self._manufacturers = {}
@@ -68,6 +68,14 @@ class Broker(object):
 
   def get_manufacturer(self, cls):
     return self._manufacturers.get(cls)
+
+  def get_or_create(self, cls):
+    """Get class manufacturer. Create and register if one does not exist."""
+    if cls not in self._manufacturers:
+      with self._lock:
+        if cls not in self._manufacturers:
+          self.register(Manufacturer(cls))
+    return self._manufacturers[cls]
 
   def add_factory(self,
                   cls,
