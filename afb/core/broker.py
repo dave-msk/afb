@@ -19,6 +19,8 @@ from __future__ import print_function
 import os
 from threading import RLock
 
+from deprecated import deprecated
+
 from afb.core.manufacturer import Manufacturer
 from afb.core.primitives import make_primitive_mfrs
 from afb.utils import docs
@@ -66,7 +68,11 @@ class Broker(object):
   def classes(self):
     return list(self._manufacturers.keys())
 
+  @deprecated(version="1.4.0", reason="Use `get` or `get_or_create` instead.")
   def get_manufacturer(self, cls):
+    return self.get(cls)
+
+  def get(self, cls):
     return self._manufacturers.get(cls)
 
   def get_or_create(self, cls):
@@ -84,7 +90,8 @@ class Broker(object):
                   sig,
                   params=None,
                   descriptions=None,
-                  force=False):
+                  force=False,
+                  create_mfr=True):
     """Register factory to Manufacturer of given class.
 
     """
@@ -94,7 +101,8 @@ class Broker(object):
                       sig,
                       params=params,
                       descriptions=descriptions,
-                      force=force)
+                      force=force,
+                      create_mfr=create_mfr)
 
   def merge(self, root, broker):
     """Merge all `Manufacturer`s from a `Broker`.
@@ -162,7 +170,7 @@ class Broker(object):
     root = types.maybe_get_cls(root, str)
     classes = broker.classes
     for cls in classes:
-      mfr = broker.get_manufacturer(cls)
+      mfr = broker.get(cls)
       self.merge_mfr(root, mfr)
 
   def _merge_mfr(self, root, mfr):
@@ -234,7 +242,7 @@ class Broker(object):
       return os.path.join("static", "%s.md" % key)
 
     for cls in self.classes:
-      mfr = self.get_manufacturer(cls)
+      mfr = self.get(cls)
       docs.export_class_markdown(
           mfr, export_dir, cls_dir_fn, cls_desc_name,
           factory_doc_path_fn, static_doc_path_fn)
@@ -251,10 +259,11 @@ class Broker(object):
                    sig,
                    params=None,
                    descriptions=None,
-                   force=False):
-    if cls not in self._manufacturers:
-      self._register(Manufacturer(cls))
-    mfr = self._manufacturers[cls]
+                   force=False,
+                   create_mfr=True):
+    mfr = self.get_or_create(cls) if create_mfr else self.get(cls)
+    if mfr is None:
+      raise KeyError("Manufacturer for `%s` not found." % cls.__name__)
     mfr.register(key,
                  factory,
                  sig,
