@@ -86,28 +86,23 @@ def export_factories_markdown(mfr,
     depth = len(factory_doc_path_rel.split('/')) - 1
     doc_root_rel = '/'.join([".."] * depth)
 
-    def format_arg_list_entry(arg, arg_sig, optional):
-      arg_line = "- %s`%s`:" % ("(optional) " if optional else "", arg)
-      type_spec = arg_sig["type"]
+    def format_arg_list_entry(name, arg, optional):
+      arg_line = "- %s`%s`:" % ("(optional) " if optional else "", name)
+      type_spec = arg["type"]
       type_line = make_type_line(
           type_spec, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=False)
       full_type_line = make_type_line(
           type_spec, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=True)
 
-      desc_line = "  - Description: %s" % arg_sig["description"]
+      desc_line = "  - Description: %s" % arg["description"]
       return "\n".join((arg_line, type_line, full_type_line, desc_line))
 
-    fn = entry["fn"]
     sig = entry["sig"]
     rqd_args = entry["rqd_args"]
-    parameters = inspect.signature(fn).parameters
     arg_doc_list = []
-    for p in parameters:
-      if p not in sig:
-        continue
-      arg_sig = sig[p]
-      optional = p not in rqd_args
-      arg_doc_list.append(format_arg_list_entry(p, arg_sig, optional))
+    for k, p in sig.items():
+      optional = k not in rqd_args
+      arg_doc_list.append(format_arg_list_entry(k, p, optional))
 
     signature_doc = "## Arguments\n\n%s" % "\n".join(arg_doc_list)
     factory_doc = "\n\n".join((title, description, signature_doc))

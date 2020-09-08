@@ -16,8 +16,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import copy
-import functools
 import inspect
 import logging
 import sys
@@ -626,49 +626,55 @@ class Manufacturer(object):
 
 
 def _format_signature(f, sig):
+  sig = collections.OrderedDict(sig)
   fsig = inspect.signature(f)
   fparams = fsig.parameters
 
-  frqd = {k for k, v in fparams.items() if v.default == inspect.Parameter.empty}
-  miss_rqds = frqd - set(sig)
-  if miss_rqds:
-    raise ValueError("Missing required arguments from `sig`.\n"
-                     "Required: {}\nGiven: {}\nMissing: {}"
-                     .format(sorted(frqd),
-                             sorted(sig),
-                             sorted(miss_rqds)))
+  rqd_sig = collections.OrderedDict()
+  opt_sig = collections.OrderedDict()
+  missing = []
+  allow_implicits = False
 
-  summary = {}
-  for k, p in fparams.items(): summary.setdefault(p.kind, set()).add(k)
-  if inspect.Parameter.POSITIONAL_ONLY in summary:
-    raise errors.SignatureError("Positional-only parameter is not supported.")
+  for k, p in fparams.items():
+    if p.kind == inspect.Parameter.POSITIONAL_ONLY:
+      raise errors.SignatureError("Positional-only parameter is not supported.")
+    elif p.kind == inspect.Parameter.VAR_POSITIONAL:
+      # TODO: Give warning that variate positionals will not be used.
+      pass
+    elif p.kind == inspect.Parameter.VAR_KEYWORD:
+      allow_implicits = True
+    else:
+      if k not in sig:
+        missing.append(k)
+        continue
 
-  if inspect.Parameter.VAR_POSITIONAL in summary:
-    # TODO: Give warning that variant positionals will not be used.
-    del summary[inspect.Parameter.VAR_POSITIONAL]
+      pspec = sig.pop(k)
+      if not isinstance(pspec, specs.ParameterSpec):
+        pspec = specs.ParameterSpec.from_raw_spec(pspec)
 
-  has_varkw = len(summary.pop(inspect.Parameter.VAR_KEYWORD, "")) > 0
-  fargs = functools.reduce(lambda l, r: l.union(r), summary.values(), set())
+      if p.default == inspect.Parameter.empty or pspec.forced:
+        rqd_sig[k] = pspec.details
+      else:
+        opt_sig[k] = pspec.details
 
-  rqd_args, norm_sig = set(), {}
-  invalid_args = set()
-  for arg, param_or_spec in sig.items():
-    if arg not in fargs and not has_varkw:
-      invalid_args.add(arg)
-    if invalid_args: continue
+  if missing:
+    raise ValueError("Missing required arguments from `signature`: {}"
+                     .format(missing))
+  del missing
 
-    param = param_or_spec
-    if not isinstance(param, specs.ParameterSpec):
-      param = specs.ParameterSpec.from_raw_spec(param)
+  if sig:
+    if not allow_implicits:
+      raise errors.SignatureError("No such arguments: %s" % list(sig))
+    for k, pspec in sig.items():
+      if not isinstance(pspec, specs.ParameterSpec):
+        pspec = specs.ParameterSpec.from_raw_spec(pspec)
+      [opt_sig, rqd_sig][pspec.forced][k] = pspec.details
 
-    norm_sig[arg] = param.details
-    if arg in frqd or param.forced:
-      rqd_args.add(arg)
-
-  if invalid_args:
-    raise errors.SignatureError("No such arguments: %s" % sorted(invalid_args))
-
-  return rqd_args, norm_sig
+  rqds = set(rqd_sig)
+  indexed = collections.OrderedDict(rqd_sig)
+  indexed.update(opt_sig)
+  print(indexed)
+  return rqds, indexed
 
 
 def _merged_name(root, name, sep="/"):
@@ -689,9 +695,9 @@ def _normalized_factory_descriptions(desc, method):
 
   valid_keys = {"short", "long"}
   desc = desc or {"short": ""}
-  if (not isinstance(desc, dict)) or \
-     ("short" not in desc) or \
-     (set(desc) - valid_keys):
+  if (not isinstance(desc, dict) or
+      "short" not in desc or
+      (set(desc) - valid_keys)):
     raise ValueError("The factory description must either be `None`, a `str`,"
                      "or a `dict` including short description as \"short\" "
                      "(required) and long description as \"long\" (optional)."
