@@ -633,7 +633,7 @@ def _format_signature(f, sig):
   rqd_sig = collections.OrderedDict()
   opt_sig = collections.OrderedDict()
   missing = []
-  allow_implicits = False
+  allow_implicit = False
 
   for k, p in fparams.items():
     if p.kind == inspect.Parameter.POSITIONAL_ONLY:
@@ -642,7 +642,7 @@ def _format_signature(f, sig):
       # TODO: Give warning that variate positionals will not be used.
       pass
     elif p.kind == inspect.Parameter.VAR_KEYWORD:
-      allow_implicits = True
+      allow_implicit = True
     else:
       if k not in sig:
         missing.append(k)
@@ -663,7 +663,7 @@ def _format_signature(f, sig):
   del missing
 
   if sig:
-    if not allow_implicits:
+    if not allow_implicit:
       raise errors.SignatureError("No such arguments: %s" % list(sig))
     for k, pspec in sig.items():
       if not isinstance(pspec, specs.ParameterSpec):
@@ -673,7 +673,6 @@ def _format_signature(f, sig):
   rqds = set(rqd_sig)
   indexed = collections.OrderedDict(rqd_sig)
   indexed.update(opt_sig)
-  print(indexed)
   return rqds, indexed
 
 
