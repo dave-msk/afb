@@ -1,3 +1,24 @@
+# Release 1.4
+## Major Features And Improvements
+- Released factory raw signature restrictions. `Manufacturer` now supports callables with `**kwargs` in its signature, which allows additional parameters to be specified in `signature`, so constructors of inherited classes could be more compact.
+- Added `Broker.get_or_create` which creates a `Manufacturer` for the given class if one does not exist.
+- Added `ArgumentSpec` for argument specification.
+- Arguments can now be forced to be treated as required if `forced=True` is specified in the argument specification (defaults to `False`)
+- Order of arguments listed in exported markdown documentation follows the scheme:
+  1. Required explicit argument
+  2. Required implicit argument
+  3. Optional explicit argument
+  4. Optional implicit argument
+
+  where "explicit" refers to its presence in the factory's raw signature, and its requiredness depends on whether it is an explicit positional or marked `forced=True` in its specification.
+
+## Bug Fixes and Other Changes
+- Marked `Broker.get_manufacturer` as deprecated, use `Broker.get` instead.
+- Added `create_mfr` switch to `Broker.add_factory` which allows an error to be raised if the class's `Manufacturer` is not found.
+
+## Breaking Changes
+- Changed `sig` to `signature` in `Manufacturer.register`.
+
 # Release 1.3
 ## Major Features And Improvements
 - `Manufacturer` now supports multi-level nested type specification.
