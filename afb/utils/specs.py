@@ -16,8 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
-
 from afb.utils import errors
 
 
@@ -26,7 +24,7 @@ def type_spec_repr(type_spec):
   if isinstance(type_spec, list):
     return "[{}]".format(type_spec_repr(type_spec[0]))
   elif isinstance(type_spec, dict):
-    k, v = next(six.iteritems(type_spec))
+    k, v = next(iter(type_spec.items()))
     return "{%s: %s}" % (type_spec_repr(k), type_spec_repr(v))
   elif isinstance(type_spec, tuple):
     return "({})".format(", ".join(type_spec))

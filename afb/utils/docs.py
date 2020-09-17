@@ -18,7 +18,6 @@ from __future__ import print_function
 
 import inspect
 import os
-import six
 
 
 def export_class_markdown(mfr,
@@ -45,13 +44,13 @@ def export_class_markdown(mfr,
   description = "## Description\n\n%s" % cls_doc
   format_factory_list_entry = create_format_list_entry_fn(factory_doc_path_fn)
   factory_doc_list = ["  - %s" % format_factory_list_entry(k, d)
-                      for k, d in sorted(six.iteritems(dynamic_fcts))]
+                      for k, d in sorted(dynamic_fcts.items())]
   factory_doc_list_str = "\n".join(factory_doc_list)
   factories_doc = "## Factories\n\n%s\n" % factory_doc_list_str
 
   format_static_list_entry = create_format_list_entry_fn(static_doc_path_fn)
   statics_doc_list = ["  - %s" % format_static_list_entry(k, d)
-                       for k, d in sorted(six.iteritems(static_fcts))]
+                      for k, d in sorted(static_fcts.items())]
   statics_doc_list_str = "\n".join(statics_doc_list)
   statics_doc = "## Static\n\n%s\n" % statics_doc_list_str
 
@@ -74,7 +73,7 @@ def export_factories_markdown(mfr,
   cls_name = cls.__qualname__
   factories = mfr.static_factories if static else mfr.dynamic_factories
 
-  for k, entry in six.iteritems(factories):
+  for k, entry in factories.items():
     title = "# %s - `%s`" % (cls_name, k)
 
     short = inspect.cleandoc(entry["descriptions"]["short"])
@@ -87,28 +86,23 @@ def export_factories_markdown(mfr,
     depth = len(factory_doc_path_rel.split('/')) - 1
     doc_root_rel = '/'.join([".."] * depth)
 
-    def format_arg_list_entry(arg, arg_sig, optional):
-      arg_line = "- %s`%s`:" % ("(optional) " if optional else "", arg)
-      type_spec = arg_sig["type"]
+    def format_arg_list_entry(name, arg, optional):
+      arg_line = "- %s`%s`:" % ("(optional) " if optional else "", name)
+      type_spec = arg["type"]
       type_line = make_type_line(
           type_spec, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=False)
       full_type_line = make_type_line(
           type_spec, doc_root_rel, cls_dir_fn, cls_desc_name, full_type=True)
 
-      desc_line = "  - Description: %s" % arg_sig["description"]
+      desc_line = "  - Description: %s" % arg["description"]
       return "\n".join((arg_line, type_line, full_type_line, desc_line))
 
-    fn = entry["fn"]
     sig = entry["sig"]
     rqd_args = entry["rqd_args"]
-    parameters = inspect.signature(fn).parameters
     arg_doc_list = []
-    for p in parameters:
-      if p not in sig:
-        continue
-      arg_sig = sig[p]
-      optional = p not in rqd_args
-      arg_doc_list.append(format_arg_list_entry(p, arg_sig, optional))
+    for k, p in sig.items():
+      optional = k not in rqd_args
+      arg_doc_list.append(format_arg_list_entry(k, p, optional))
 
     signature_doc = "## Arguments\n\n%s" % "\n".join(arg_doc_list)
     factory_doc = "\n\n".join((title, description, signature_doc))
@@ -137,7 +131,7 @@ def get_type_spec_repr(type_spec, link_fn):
   if isinstance(type_spec, list):
     return "[%s]" % get_type_spec_repr(type_spec[0], link_fn)
   if isinstance(type_spec, dict):
-    kt, vt = next(six.iteritems(type_spec))
+    kt, vt = next(iter(type_spec.items()))
     return "{%s: %s}" % (get_type_spec_repr(kt, link_fn),
                          get_type_spec_repr(vt, link_fn))
   if isinstance(type_spec, tuple):

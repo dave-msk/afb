@@ -19,8 +19,6 @@ from __future__ import print_function
 import copy
 import itertools
 
-import six
-
 from afb.ext.app.values import values as val_base
 
 
@@ -122,7 +120,7 @@ class _ComposedDictValues(val_base.Values):
     self._base = base or {}
 
   def _make_iterator(self):
-    keys, vals = list(zip(*list(six.iteritems(self._values_map.items))))
+    keys, vals = list(zip(*list(self._values_map.items.items())))
     its = [v.make_iterator() for v in vals]
 
     for comb in self._combine_fn(*its):

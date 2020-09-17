@@ -16,8 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import six
-
 from afb.utils import types
 
 
@@ -25,8 +23,12 @@ class StructMismatchError(Exception):
   pass
 
 
+class SignatureError(Exception):
+  pass
+
+
 def validate_is_callable(obj, name):
-  if not six.callable(obj):
+  if not callable(obj):
     raise ValueError("`{}` must be a callable. Given: {}".format(name, obj))
 
 
@@ -55,7 +57,7 @@ def validate_rqd_args(input_args, rqd_args):
                             sorted(input_args),
                             sorted(missing)))
 
-  inv_args = {k for k, v in six.iteritems(input_args)
+  inv_args = {k for k, v in input_args.items()
               if k in rqd_args and v is None}
   if inv_args:
     raise ValueError("Required arguments must not be None.\n"
@@ -73,7 +75,7 @@ def validate_kwargs(obj, name):
                     "Given {}".format(name, type(obj)))
   inv_keys = []
   for k in obj:
-    if not isinstance(k, six.string_types):
+    if not isinstance(k, str):
       inv_keys.append(k)
   if inv_keys:
     raise TypeError("Keys in `{}` must be of string type. Given: {}"
@@ -89,9 +91,9 @@ def validate_struct(type_spec, struct):
 
   # `dict` case
   if isinstance(type_spec, dict):
-    k_spec, v_spec = next(six.iteritems(type_spec))
+    k_spec, v_spec = next(iter(type_spec.items()))
     if isinstance(struct, dict):
-      for ks, vs in six.iteritems(struct):
+      for ks, vs in struct.items():
         validate_struct(k_spec, ks)
         validate_struct(v_spec, vs)
       return
@@ -144,7 +146,7 @@ def validate_type_spec(type_spec):
     validate_type_spec(type_spec[0])
     return
   if isinstance(type_spec, dict) and len(type_spec) == 1:
-    k, v = next(six.iteritems(type_spec))
+    k, v = next(iter(type_spec.items()))
     validate_type_spec(k)
     validate_type_spec(v)
     return

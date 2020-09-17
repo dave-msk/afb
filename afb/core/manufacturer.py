@@ -16,15 +16,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import copy
 import inspect
 import logging
-import os
 import sys
 import threading
 
-import six
-
+from afb.core import specs
 from afb.core import static
 from afb.utils import errors
 from afb.utils import keys
@@ -177,11 +176,15 @@ class Manufacturer(object):
   def _get_factory_spec(self, key):
     return self._static.get(key) or self._dynamic.get(key)
 
-  def merge(self, root, mfr):
+  def merge(self, root, mfr, force=False, sep="/"):
     """Merge another manufacturer of the same type.
 
     This method registers all the factories from the given Manufacturer.
     The resulting key of the merged factories will have the following form:
+
+      * "root<sep><method_name>"
+
+    For instance, using the default `sep="/"`, the factory key becomes:
 
       * "root/<method_name>"
 
@@ -193,6 +196,10 @@ class Manufacturer(object):
       root: A string that serves as the root of the factories from `mfr`.
         If empty, the original method name will be used directly.
       mfr: `Manufacturer` or a zero-argument function that returns one.
+      force: If True, overwrites the original factory registration in case of
+        key collision. Otherwise, an error is raised. Defaults to False.
+      sep: Separator between root and method name in the resulting factory key.
+        Defaults to "/".
 
     Raises:
       KeyError:
@@ -208,10 +215,10 @@ class Manufacturer(object):
                         "\"mfr\" must be either a `Manufacturer` or a "
                         "zero-argument function that returns one. "
                         "Given: {}".format(mfr))
-    self._validate_merge_request(root, mfr)
-    self._merge(root, mfr)
+    self._validate_merge_request(root, mfr, force=force, sep=sep)
+    self._merge(root, mfr, force=force, sep=sep)
 
-  def merge_all(self, mfr_dict, force=False):
+  def merge_all(self, mfr_dict, force=False, sep="/"):
     """Merges multiple manufacturers.
 
     Args:
@@ -219,6 +226,8 @@ class Manufacturer(object):
         functions where each returns a `Manufacturer`.
       force: If `True`, overwrites the existing factory (if any). If `False`,
         raises ValueError if `key` is already registered. Defaults to `False`.
+      sep: Separator between root and method name in the resulting factory key.
+        Defaults to "/". See `Manufacturer.merge` for details.
 
     Raises:
       KeyError:
@@ -229,21 +238,21 @@ class Manufacturer(object):
         - Output class of `mfr` is not a subclass of this output class.
     """
     mfr_dict_validated = {}
-    for root, mfr in six.iteritems(mfr_dict):
+    for root, mfr in mfr_dict.items():
       mfr = types.maybe_get_cls(mfr, Manufacturer)
       self._validate_merge_request(root, mfr, force=force)
       mfr_dict_validated[root] = mfr
 
-    for root, mfr in six.iteritems(mfr_dict_validated):
-      self._merge(root, mfr, force=force)
+    for root, mfr in mfr_dict_validated.items():
+      self._merge(root, mfr, force=force, sep=sep)
 
-  def _merge(self, root, mfr, force=False):
+  def _merge(self, root, mfr, force=False, sep="/"):
     factories = mfr.dynamic_factories
-    for key, spec in six.iteritems(factories):
-      key = _merged_name(root, key)
+    for key, spec in factories.items():
+      key = _merged_name(root, key, sep=sep)
       self.register(key=key,
                     factory=spec["fn"],
-                    sig=spec["sig"],
+                    signature=spec["sig"],
                     params=spec["params"],
                     descriptions=spec["descriptions"],
                     force=force)
@@ -255,21 +264,62 @@ class Manufacturer(object):
   def register(self,
                key,
                factory,
-               sig,
+               signature,
                params=None,
                descriptions=None,
                force=False):
     """Register a factory.
 
+    The `factory` is the callable to be used for object creation. The details of
+    each of the factory arguments needs to be specified in `signature`.
+
+    ----------------------------------------------------------------------------
+
+    Signature
+    =========
+
+    The required signature is a `dict` mapping in the following format:
+
+      {
+        <arg-name>: `ParameterSpec` (or its raw format) / Type Specification,
+        ...
+      }
+
+    The raw format of `ParameterSpec` is `dict` in the following format:
+
+      {
+        "type": Type Specification,
+        "description": (optional) "Description of the argument",
+        "forced": (optional) True / False (default)
+      }
+
+    The description will be rendered in the exported documentation.
+    The `forced` switch indicates whether the argument should be registered
+    as required. If `True`, the argument is required by when calling this
+    factory through `Manufacturer.make`. If `False`, its requirement will be
+    inferred from the factory's raw signature.
+
+    A type specification is either of the following:
+
+      - Singleton `dict` where the key and value are both type specifications;
+      - Singleton `list`, where the content is a type specification;
+      - `tuple` of type specifications; or
+      - A class or type.
+
+    For example, the type specification of a dict mapping a string to
+    `TestClass` objects would be `{str: TestClass}`.
+
+    ----------------------------------------------------------------------------
+
     Args:
       key: A string key that identifies the factory.
       factory: The factory to be registered.
-      sig: The signature of the input parameters. It is a dict mapping each
-        argument of factory to its expected type.
+      signature: The signature of the input parameters. It is a dict mapping
+        each argument of factory to its parameter specification.
       params: (Optional) Default parameters for this factory.
       descriptions: (Optional) Descriptions of this factory. If provided, it
-        must specifies the short description keyed by "short". A long
-        description keyed by "long" can optionally be included.
+        must a string or a dict with short description by "short" (required),
+        and a long description by "long" (optional).
       force: If `True`, overwrites the existing factory (if any). If `False`,
         raises ValueError if `key` is already registered. Defaults to `False`.
 
@@ -288,7 +338,7 @@ class Manufacturer(object):
     """
     self._register(key,
                    factory,
-                   sig,
+                   signature,
                    params=params,
                    descriptions=descriptions,
                    force=force)
@@ -306,7 +356,7 @@ class Manufacturer(object):
     Or a dictionary in keyword mode:
 
         {"factory": factory,            # required
-         "sig": signature,              # required
+         "signature": signature,        # required
          "params": default_params,      # optional
          "descriptions": descriptions}  # optional
 
@@ -369,23 +419,27 @@ class Manufacturer(object):
         * Keyword mode - A dictionary:
 
           {"factory": factory,            # required
-           "sig": signature,              # required
+           "signature": signature,        # required
            "params": default_params,      # optional
            "descriptions": descriptions}  # optional
 
       keyword_mode: Boolean. Indicates the mode in which to perform factory
         registrations. See above.
     """
-    for k, fn in six.iteritems(factories_fn_dict):
+    for k, fn in factories_fn_dict.items():
       if keyword_mode:
-        self.register(k, **fn())
+        kwargs = fn()
+        if "sig" in kwargs:
+          kwargs["signature"] = kwargs["sig"]
+          del kwargs["sig"]
+        self.register(k, **kwargs)
       else:
         self.register(k, *fn())
 
   def _register(self,
                 key,
                 factory,
-                sig,
+                signature,
                 params=None,
                 descriptions=None,
                 force=False,
@@ -405,40 +459,25 @@ class Manufacturer(object):
     self._wrap_error(
         lambda: errors.validate_is_callable(factory, "factory"), key=key)
 
-    if not isinstance(sig, dict):
-      raise self._raise_error(TypeError,
-                              "Method: {}\n`sig` must be a dict mapping "
-                              "factory arguments to their corresponding type "
-                              "specification or `dict` with type "
-                              "specification and description, keyed by "
-                              "\"type\" and \"description\" respectively."
-                              .format(key))
+    if not isinstance(signature, dict):
+      raise self._raise_error(
+          TypeError,
+          "Method: {}\n`sig` must be a dict mapping factory arguments to their "
+          "parameter specification, or (deprecated) type specification."
+          .format(key))
 
     params = params or {}
     self._wrap_error(
         lambda: errors.validate_kwargs(params, "params"), key=key)
 
+    descriptions = descriptions or factory.__doc__
     descriptions = self._wrap_error(
         lambda: _normalized_factory_descriptions(descriptions, key),
         key=key)
 
-    # Check if `sig` contains all required but no invalid arguments.
-    rqd_args, all_args = fn_args(factory)
-    miss_args = rqd_args - set(sig)
-    if miss_args:
-      raise self._raise_error(ValueError,
-                              "Method: {}\nMissing required arguments from "
-                              "`sig`. \nRequired: {}\nGiven: {}\nMissing: {}"
-                              .format(key,
-                                      sorted(rqd_args),
-                                      sorted(sig),
-                                      sorted(miss_args)))
-    self._wrap_error(lambda: errors.validate_args(sig, all_args), key=key)
-    self._wrap_error(lambda: errors.validate_args(params, sig), key=key)
-
-    norm_sig = {k: self._wrap_error(lambda: _normalized_sig_entry(s),
-                                    key="method")
-                for k, s in six.iteritems(sig)}
+    # Normalize signature and determine required arguments.
+    rqd_args, norm_sig = self._wrap_error(
+        lambda: _format_signature(factory, signature), key=key)
 
     # Register factory.
     with self._lock:
@@ -501,14 +540,14 @@ class Manufacturer(object):
         lambda: errors.validate_rqd_args(params, rqd_args), key=method)
 
     # 2.2. Validate parameter structures
-    for k, p in six.iteritems(params):
+    for k, p in params.items():
       type_spec = sig[k]["type"]
       self._wrap_error(lambda: errors.validate_struct(type_spec, p),
                        prefix="Method: {}\nArgument: {}".format(method, k))
 
     # 2.3. Construct inputs
     inputs = {}
-    for k, p in six.iteritems(params):
+    for k, p in params.items():
       inputs[k] = None if p is None else self._get_struct(sig[k]["type"], p)
 
     # 3. Call factory
@@ -526,10 +565,10 @@ class Manufacturer(object):
       return [self._get_struct(t, n) for n in nested]
 
     if isinstance(type_spec, dict):
-      kt, vt = next(six.iteritems(type_spec))
+      kt, vt = next(iter(type_spec.items()))
       if isinstance(nested, dict):
         return {self._get_struct(kt, kn): self._get_struct(vt, vn)
-                for kn, vn in six.iteritems(nested)}
+                for kn, vn in nested.items()}
       elif isinstance(nested, (list, tuple)):
         return {self._get_struct(kt, kn): self._get_struct(vt, vn)
                 for kn, vn in nested}
@@ -544,7 +583,7 @@ class Manufacturer(object):
     # This line should be unreachable.
     raise errors.StructMismatchError()
 
-  def _validate_merge_request(self, key, mfr, force=False):
+  def _validate_merge_request(self, key, mfr, force=False, sep="/"):
     if not isinstance(key, str):
       raise self._raise_error(TypeError,
                               "`key` must be a `str`. Given: {}".format(key))
@@ -558,7 +597,7 @@ class Manufacturer(object):
                               "The output class of `mfr` must be a subclass of "
                               "{}, given: {}".format(self.cls, mfr.cls))
     factories = mfr.dynamic_factories
-    merged_names = set(_merged_name(key, n) for n in factories)
+    merged_names = set(_merged_name(key, n, sep=sep) for n in factories)
     collisions = merged_names.intersection(self._dynamic)
     if collisions:
       if force:
@@ -586,37 +625,81 @@ class Manufacturer(object):
     raise err_type(message)
 
 
-def fn_args(func):
-  sig = inspect.signature(func)
-  required = {k for k, v in six.iteritems(sig.parameters)
-              if v.default == inspect.Parameter.empty}
-  return required, set(sig.parameters.keys())
+def _format_signature(f, sig):
+  sig = collections.OrderedDict(sig)
+  fsig = inspect.signature(f)
+  fparams = fsig.parameters
+
+  rqd_sig = collections.OrderedDict()
+  opt_sig = collections.OrderedDict()
+  missing = []
+  allow_implicit = False
+
+  for k, p in fparams.items():
+    if p.kind == inspect.Parameter.POSITIONAL_ONLY:
+      raise errors.SignatureError("Positional-only parameter is not supported.")
+    elif p.kind == inspect.Parameter.VAR_POSITIONAL:
+      # TODO: Give warning that variate positionals will not be used.
+      pass
+    elif p.kind == inspect.Parameter.VAR_KEYWORD:
+      allow_implicit = True
+    else:
+      if k not in sig:
+        missing.append(k)
+        continue
+
+      pspec = sig.pop(k)
+      if not isinstance(pspec, specs.ArgumentSpec):
+        pspec = specs.ArgumentSpec.from_raw_spec(pspec)
+
+      if p.default == inspect.Parameter.empty or pspec.forced:
+        rqd_sig[k] = pspec.details
+      else:
+        opt_sig[k] = pspec.details
+
+  if missing:
+    raise ValueError("Missing required arguments from `signature`: {}"
+                     .format(missing))
+  del missing
+
+  if sig:
+    if not allow_implicit:
+      raise errors.SignatureError("No such arguments: %s" % list(sig))
+    for k, pspec in sig.items():
+      if not isinstance(pspec, specs.ArgumentSpec):
+        pspec = specs.ArgumentSpec.from_raw_spec(pspec)
+      [opt_sig, rqd_sig][pspec.forced][k] = pspec.details
+
+  rqds = set(rqd_sig)
+  indexed = collections.OrderedDict(rqd_sig)
+  indexed.update(opt_sig)
+  return rqds, indexed
 
 
-def _merged_name(root, name):
-  root = root or ""
-  return os.path.join(root, name).replace("\\", "/")
+def _merged_name(root, name, sep="/"):
+  return "%s%s%s" % (root, sep, name) if root else name
 
 
-def _normalized_sig_entry(s):
-  valid_keys = {"type", "description"}
-  if not (isinstance(s, dict) and set(s) == valid_keys):
-    s = {"type": s, "description": ""}
-  type_spec = s["type"]
-  errors.validate_type_spec(type_spec)
-  return s
+def _is_param_format(spec):
+  if isinstance(spec, dict):
+    unknown_keys = set(spec) - {"type", "description", "forced"}
+    return "type" in spec and not unknown_keys
+  return False
 
 
 def _normalized_factory_descriptions(desc, method):
+  if isinstance(desc, str):
+    lines = inspect.cleandoc(desc).split("\n")
+    return {"short": lines[0], "long": "\n".join(lines[1:]).strip()}
+
   valid_keys = {"short", "long"}
   desc = desc or {"short": ""}
-  if (not isinstance(desc, dict)) or \
-     ("short" not in desc) or \
-     (set(desc) - valid_keys):
-    raise ValueError("The factory description must either be `None` or a `dict`"
-                     " with the short description keyed as by \"short\" "
-                     "included. A long description keyed by \"long\" can be "
-                     "optionally provided.\n"
+  if (not isinstance(desc, dict) or
+      "short" not in desc or
+      (set(desc) - valid_keys)):
+    raise ValueError("The factory description must either be `None`, a `str`,"
+                     "or a `dict` including short description as \"short\" "
+                     "(required) and long description as \"long\" (optional)."
                      "Method: {}\nGiven: {}".format(method, desc))
   short = desc["short"]
   long = desc.get("long", "")

@@ -17,8 +17,9 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import six
-from threading import Lock
+from threading import RLock
+
+from deprecated import deprecated
 
 from afb.core.manufacturer import Manufacturer
 from afb.core.primitives import make_primitive_mfrs
@@ -53,7 +54,7 @@ class Broker(object):
   """
 
   def __init__(self):
-    self._lock = Lock()
+    self._lock = RLock()
 
     # Initialize broker
     self._manufacturers = {}
@@ -67,8 +68,20 @@ class Broker(object):
   def classes(self):
     return list(self._manufacturers.keys())
 
+  @deprecated(version="1.4.0", reason="Use `get` or `get_or_create` instead.")
   def get_manufacturer(self, cls):
+    return self.get(cls)
+
+  def get(self, cls):
     return self._manufacturers.get(cls)
+
+  def get_or_create(self, cls):
+    """Get class manufacturer. Create and register if one does not exist."""
+    if cls not in self._manufacturers:
+      with self._lock:
+        if cls not in self._manufacturers:
+          self.register(Manufacturer(cls))
+    return self._manufacturers[cls]
 
   def add_factory(self,
                   cls,
@@ -77,7 +90,8 @@ class Broker(object):
                   sig,
                   params=None,
                   descriptions=None,
-                  force=False):
+                  force=False,
+                  create_mfr=True):
     """Register factory to Manufacturer of given class.
 
     """
@@ -87,7 +101,8 @@ class Broker(object):
                       sig,
                       params=params,
                       descriptions=descriptions,
-                      force=force)
+                      force=force,
+                      create_mfr=create_mfr)
 
   def merge(self, root, broker):
     """Merge all `Manufacturer`s from a `Broker`.
@@ -146,7 +161,7 @@ class Broker(object):
         `Manufacturer`s, or zero-argument functions where each returns one,
          to be merged. The key will be used across the iterable.
     """
-    for key, mfrs in six.iteritems(mfrs_dict):
+    for key, mfrs in mfrs_dict.items():
       for mfr in mfrs:
         self.merge_mfr(key, mfr)
 
@@ -155,7 +170,7 @@ class Broker(object):
     root = types.maybe_get_cls(root, str)
     classes = broker.classes
     for cls in classes:
-      mfr = broker.get_manufacturer(cls)
+      mfr = broker.get(cls)
       self.merge_mfr(root, mfr)
 
   def _merge_mfr(self, root, mfr):
@@ -205,7 +220,7 @@ class Broker(object):
                       "factory to its arguments for instantiation).\n"
                       "Target Type: {}\nGiven: {}".format(cls, spec))
 
-    method, params = next(six.iteritems(spec))
+    method, params = next(iter(spec.items()))
     if cls is dict and not mfr.has_method(method):
       return spec
     return mfr.make(method=method, params=params)
@@ -227,7 +242,7 @@ class Broker(object):
       return os.path.join("static", "%s.md" % key)
 
     for cls in self.classes:
-      mfr = self.get_manufacturer(cls)
+      mfr = self.get(cls)
       docs.export_class_markdown(
           mfr, export_dir, cls_dir_fn, cls_desc_name,
           factory_doc_path_fn, static_doc_path_fn)
@@ -244,10 +259,11 @@ class Broker(object):
                    sig,
                    params=None,
                    descriptions=None,
-                   force=False):
-    if cls not in self._manufacturers:
-      self._register(Manufacturer(cls))
-    mfr = self._manufacturers[cls]
+                   force=False,
+                   create_mfr=True):
+    mfr = self.get_or_create(cls) if create_mfr else self.get(cls)
+    if mfr is None:
+      raise KeyError("Manufacturer for `%s` not found." % cls.__name__)
     mfr.register(key,
                  factory,
                  sig,
