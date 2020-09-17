@@ -18,7 +18,7 @@ CONFIG_LOADER = {
 
 def get_load_config():
   sig = {
-      "config": specs.ParameterSpec(
+      "config": specs.ArgumentSpec(
           str,
           description="Path to configuration file containing a "
                       "representation corresponding to a single `dict`."),

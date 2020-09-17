@@ -5,7 +5,7 @@ from __future__ import print_function
 from afb.utils import errors
 
 
-class ParameterSpec(object):
+class ArgumentSpec(object):
   def __init__(self, type, description="", forced=False):
     errors.validate_type_spec(type)
     self._tspec = type

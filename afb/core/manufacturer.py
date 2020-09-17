@@ -649,8 +649,8 @@ def _format_signature(f, sig):
         continue
 
       pspec = sig.pop(k)
-      if not isinstance(pspec, specs.ParameterSpec):
-        pspec = specs.ParameterSpec.from_raw_spec(pspec)
+      if not isinstance(pspec, specs.ArgumentSpec):
+        pspec = specs.ArgumentSpec.from_raw_spec(pspec)
 
       if p.default == inspect.Parameter.empty or pspec.forced:
         rqd_sig[k] = pspec.details
@@ -666,8 +666,8 @@ def _format_signature(f, sig):
     if not allow_implicit:
       raise errors.SignatureError("No such arguments: %s" % list(sig))
     for k, pspec in sig.items():
-      if not isinstance(pspec, specs.ParameterSpec):
-        pspec = specs.ParameterSpec.from_raw_spec(pspec)
+      if not isinstance(pspec, specs.ArgumentSpec):
+        pspec = specs.ArgumentSpec.from_raw_spec(pspec)
       [opt_sig, rqd_sig][pspec.forced][k] = pspec.details
 
   rqds = set(rqd_sig)
