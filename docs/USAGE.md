@@ -1,6 +1,6 @@
 # Usage Guide
 
-This document describes the usage of **AFB**.
+This document describes the usage of **afb**.
 
 ## Construction
 
@@ -22,6 +22,8 @@ class TargetType(object):
 mfr = Manufacturer(TargetType)
 ```
 
+**NOTE:** Starting from **v1.4.0**, the `Manufacturer` can be created and registered directly via `Broker.get_or_create(Class)`. Given a `Broker` (as `brk`), the above `mfr` can be created (or retrieved) with `mfr = brk.get_or_create(TargetType)`.
+
 Once we have a `Manufacturer`, we can start registering factories to it. The registration of a factory involves a `Manufacturer.register` call, which accepts the following arguments:
 
 - `name`: The name of factory. This is used in `Manufacturer.make` for retrieving the factory for the object creation.
@@ -29,6 +31,24 @@ Once we have a `Manufacturer`, we can start registering factories to it. The reg
 - `sig`: The signature of the function. This is used for automatic instantiation of argument objects through the `Manufacturer` network.
 - `params`: (Optional) Default parameters, used when `params` is not provided in the `Manfuacturer.make` call.
 - `descriptions`: (Optional) Descriptions of the factory. Used in documentation generation.
+
+The `Manufacturer` needs to be registered to a `Broker` for factory call delegations:
+
+```python
+import afb
+
+# Defines / Imports `Manufacturer` as `mfr`
+
+brk = afb.Broker()
+brk.register(mfr)
+
+# Starting from v1.4.0, the creation of `Manufacturer`s can be done directly
+# through the `Broker.get_or_create(cls)` call. This allows easier construction
+# of the `Manufacturer` network that the user may distribute the `Manufacturer`
+# construction logic to responsible packages which are called by a factory 
+# that creates the main `Broker`.
+target_type_mfr = brk.get_or_create(TargetType)
+```
 
 ### Factory
 
@@ -182,7 +202,7 @@ sig = {
 }
 ```
 
-**AFB** supports nested type specifications where each form could be nested in one another, as illustrated above. Each input argument is expected to be either `None`, or conform to the specified structure. The `Manufacturer` takes care of the argument preparation that gives a value in the exact same structure as the required type specification. See the section **Object Specification** below for details.
+**afb** supports nested type specifications where each form could be nested in one another, as illustrated above. Each input argument is expected to be either `None`, or conform to the specified structure. The `Manufacturer` takes care of the argument preparation that gives a value in the exact same structure as the required type specification. See the section **Object Specification** below for details.
 
 ## Application
 
@@ -331,7 +351,7 @@ subway_order = {
 
 ## Documentation
 
-**AFB** supports documentation generation. A document directory will be generated for each `Manufacturer` with the following structure:
+**afb** supports documentation generation. A document directory will be generated for each `Manufacturer` with the following structure:
 
 ```
 full_class_name/
