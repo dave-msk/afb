@@ -1,4 +1,3 @@
-setup.cfg
 test_*
 *__pycache__*
 *.pyc
