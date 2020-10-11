@@ -20,9 +20,9 @@ from afb.utils import errors
 
 
 class ArgumentSpec(object):
-  def __init__(self, dtype, description="", forced=False):
-    errors.validate_type_spec(dtype)
-    self._dtype = dtype
+  def __init__(self, type, description="", forced=False):
+    errors.validate_type_spec(type)
+    self._type_spec = type
     self._description = description
     self._forced = forced
 
@@ -32,7 +32,7 @@ class ArgumentSpec(object):
 
   @property
   def details(self):
-    return {"type": self._dtype, "description": self._description}
+    return {"type": self._type_spec, "description": self._description}
 
   @classmethod
   def from_raw_spec(cls, param_or_type_spec):
