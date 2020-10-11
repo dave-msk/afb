@@ -171,7 +171,7 @@ class Manufacturer(object):
 
   def _init_static(self):
     for reg in static.make_static_factories(self):
-      self._register(**reg, factory_type=keys.FactoryType.STATIC)
+      self._register(factory_type=keys.FactoryType.STATIC, **reg)
 
   def _get_factory_spec(self, key):
     return self._static.get(key) or self._dynamic.get(key)

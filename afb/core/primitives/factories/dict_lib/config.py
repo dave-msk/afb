@@ -54,7 +54,7 @@ def load_config(config):
   The config file must contain a representation that will be deserialized into
   a single `dict`. Additional dictionaries (e.g. from YAML) are ignored.
   """
-  format = os.path.splitext(config)[1][1:].lower()
+  fmt = os.path.splitext(config)[1][1:].lower()
   with open(config, 'rb') as f:
-    data = CONFIG_LOADER[format](f)
+    data = CONFIG_LOADER[fmt](f)
   return data
