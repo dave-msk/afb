@@ -17,6 +17,9 @@ import setuptools
 with open("README.md", "r") as fh:
   long_description = fh.read()
 
+with open("requirements.txt", "r") as fin:
+  requirements = [line.strip() for line in fin]
+
 setuptools.setup(
   name="afb",
   version="1.4.1",
@@ -51,8 +54,6 @@ setuptools.setup(
       "Topic :: Software Development :: Libraries :: Python Modules",
       "Topic :: Software Development :: Object Brokering",
   ],
-  install_requires=[
-      "pyyaml", "deprecated",
-  ],
+  install_requires=requirements,
   python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
 )
