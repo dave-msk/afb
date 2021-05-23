@@ -21,7 +21,7 @@ from afb.core import specs
 
 def make_from_config(mfr):
   sig = {
-      "config": specs.ArgumentSpec(
+      "config": specs.ParameterSpec(
           str,
           description="Config file in YAML/JSON, containing a single "
                       'object specification for class "%s"' % mfr.cls.__name__),
