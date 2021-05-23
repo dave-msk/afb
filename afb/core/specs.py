@@ -16,15 +16,31 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import warnings
+
+from deprecated import deprecated
+
 from afb.utils import errors
 
 
 class ParameterSpec(object):
-  def __init__(self, type, description="", required=False):
+  def __init__(self, type, description="", required=False, forced=None):
     errors.validate_type_spec(type)
     self._type_spec = type
     self._description = description
-    self._required = required
+
+    if forced is not None:
+      warnings.warn(
+          "The parameter `forced` is deprecated. Use `required` instead.")
+      self._required = bool(forced)
+    else:
+      self._required = required
+
+  @deprecated(version="1.5.0",
+              reason="Use property `required` instead.")
+  @property
+  def forced(self):
+    return self.required
 
   @property
   def required(self):
