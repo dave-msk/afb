@@ -65,6 +65,19 @@ def create_param_spec(maybe_raw_spec):
   return ParameterSpec.from_raw_spec(maybe_raw_spec)
 
 
+def _validate_raw_spec(raw_spec):
+  if "type" not in raw_spec:
+    raise errors.SignatureError(
+        "Missing type specification `type`. Given: {}".format(raw_spec))
+
+  if not isinstance(raw_spec.get("description", ""), str):
+    raise errors.SignatureError(
+        "`description` must be a string. Given: {}".format(raw_spec))
+  if not isinstance(raw_spec.get("required", True), bool):
+    raise errors.SignatureError(
+        "`required` must be a bool. Given: {}".format(raw_spec))
+
+
 def _is_param_format(spec):
   if isinstance(spec, dict):
     unknown_keys = set(spec) - {"type", "description", "required"}
