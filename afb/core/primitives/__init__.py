@@ -16,8 +16,5 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.core.primitives.primitive_mfrs import make_primitive_mfrs
-
-del absolute_import
-del division
-del print_function
+from afb.core.primitives._registry import create_mfr
+from afb.core.primitives._registry import is_supported

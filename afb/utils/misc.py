@@ -16,25 +16,64 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.core import manufacturer as mfr_lib
-from afb.utils import keys
+import json
+import os
+
+import yaml
+
+from afb.utils import proxy
+
+NONE = object()
+
+CONFIG_LOADER = {
+    'yaml': yaml.safe_load,
+    'yml': yaml.safe_load,
+    'json': json.load,
+}
+
+_mfr_lib = proxy.ModuleProxy("afb.core.manufacturer")
 
 
-def create_mfr(cls, fct_fn_dict, keyword_mode=False):
-  mfr = mfr_lib.Manufacturer(cls)
-  mfr.register_dict(fct_fn_dict, keyword_mode=keyword_mode)
-  return mfr
+def create_mfr(cls, fct_fn_dict, keyword_mode=None):
+  if keyword_mode is not None:
+    # TODO: Add deprecation warning
+    pass
+  return _mfr_lib.Manufacturer.from_dict(cls, fct_fn_dict)
 
 
-def create_mfr_with_static_factories(cls, fct_fn_dict, keyword_mode=False):
-  class StaticManufacturer(mfr_lib.Manufacturer):
-    def _init_static(self):
-      super(StaticManufacturer, self)._init_static()
-      for k, fn in fct_fn_dict.items():
-        if keyword_mode:
-          kwargs = dict(fn(), factory_type=keys.FactoryType.STATIC)
-          self._register(k, **kwargs)
-        else:
-          self._register(k, *fn(), factory_type=keys.FactoryType.STATIC)
+def cls_to_qualname_id(cls, sep="_"):
+  if not isinstance(cls, type):
+    # TODO: Add error message
+    raise TypeError("`cls` must be a class. Given: {}".format(cls))
+  fmt = "%s" + sep + "%s"
+  return fmt % (cls.__module__.replace(".", sep), cls.__name__)
 
-  return StaticManufacturer(cls)
+
+def cls_fullname(cls):
+  if not isinstance(cls, type):
+    raise TypeError("`cls` must be a class. Given: {}".format(cls))
+
+  return "%s.%s" % (cls.__module__, cls.__name__)
+
+
+def load_config(config):
+  """Loads dictionary from config file.
+
+  The currently supported file format is YAML and JSON.
+
+  The file format is determined by the file extension:
+
+  - YAML: `.yaml`, `.yml`
+  - JSON: `.json`
+
+  The config file must contain a representation that will be deserialized into
+  a single `dict`. Additional dictionaries (e.g. from YAML) are ignored.
+  """
+  fmt = os.path.splitext(config)[1][1:].lower()
+  with open(config, 'rb') as f:
+    data = CONFIG_LOADER[fmt](f) or {None: None}
+  if not isinstance(data, dict) or len(data) != 1:
+    # TODO: Add error message
+    raise TypeError()
+
+  return data

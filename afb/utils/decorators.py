@@ -17,6 +17,19 @@ from __future__ import division
 from __future__ import print_function
 
 
+class LazyPropery(object):
+  """
+  TODO: Add descriptions
+  """
+  def __init__(self, function):
+    self.function = function
+    self.name = function.__name__
+
+  def __get__(self, obj, type=None):
+    obj.__dict__[self.name] = self.function(obj)
+    return obj.__dict__[self.name]
+
+
 def lazyprop(func):
   """Decorator that makes a property lazy-evaluated.
 

@@ -16,15 +16,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import os
+import warnings
 from threading import RLock
 
 from deprecated import deprecated
 
 from afb.core.manufacturer import Manufacturer
-from afb.core.primitives import make_primitive_mfrs
-from afb.utils import docs
-from afb.utils import types
+from afb.core import primitives
+from afb.utils import fn_util
 
 
 class Broker(object):
@@ -58,11 +57,11 @@ class Broker(object):
 
     # Initialize broker
     self._manufacturers = {}
-    self._initialize()
+    # self._initialize()
 
-  def _initialize(self):
-    # Register manufacturers of the primitives
-    self.register_all(make_primitive_mfrs())
+  # def _initialize(self):
+  #   # Register manufacturers of the primitives
+  #   self.register_all(create_primitive_mfrs())
 
   @property
   def classes(self):
@@ -77,10 +76,16 @@ class Broker(object):
 
   def get_or_create(self, cls):
     """Get class manufacturer. Create and register if one does not exist."""
+    if not isinstance(cls, type):
+      # TODO: Add error message
+      raise TypeError()
     if cls not in self._manufacturers:
       with self._lock:
         if cls not in self._manufacturers:
-          self.register(Manufacturer(cls))
+          if primitives.is_supported(cls):
+            self.register(primitives.create_mfr(cls))
+          else:
+            self.register(Manufacturer(cls))
     return self._manufacturers[cls]
 
   def add_factory(self,
@@ -166,15 +171,15 @@ class Broker(object):
         self.merge_mfr(key, mfr)
 
   def _merge(self, root, broker):
-    broker = types.maybe_get_cls(broker, Broker)
-    root = types.maybe_get_cls(root, str)
+    broker = fn_util.maybe_call(broker, Broker)
+    root = fn_util.maybe_call(root, str)
     classes = broker.classes
     for cls in classes:
       mfr = broker.get(cls)
       self.merge_mfr(root, mfr)
 
   def _merge_mfr(self, root, mfr):
-    mfr = types.maybe_get_cls(mfr, Manufacturer)
+    mfr = fn_util.maybe_call(mfr, Manufacturer)
     if mfr.cls not in self._manufacturers:
       self.register(Manufacturer(mfr.cls))
 
@@ -225,32 +230,20 @@ class Broker(object):
       return spec
     return mfr.make(method=method, params=params)
 
+  @deprecated(version="1.5.0",
+              reason="")
   def export_markdown(self,
                       export_dir,
                       cls_dir_fn=None,
-                      cls_desc_name="description"):
+                      cls_desc_name=None):
+    if (cls_dir_fn, cls_desc_name) != (None, None):
+      # TODO: Add warning
+      warnings.warn("")
+    return self.export_docs(export_dir)
 
-    def default_cls_dir_fn(cls):
-      return "%s.%s" % (cls.__module__, cls.__qualname__)
-
-    cls_dir_fn = cls_dir_fn or default_cls_dir_fn
-
-    def factory_doc_path_fn(key):
-      return os.path.join("factories", "%s.md" % key)
-
-    def static_doc_path_fn(key):
-      return os.path.join("static", "%s.md" % key)
-
-    for cls in self.classes:
-      mfr = self.get(cls)
-      docs.export_class_markdown(
-          mfr, export_dir, cls_dir_fn, cls_desc_name,
-          factory_doc_path_fn, static_doc_path_fn)
-      docs.export_factories_markdown(
-          mfr, export_dir, cls_dir_fn, cls_desc_name, factory_doc_path_fn)
-      docs.export_factories_markdown(
-          mfr, export_dir, cls_dir_fn, cls_desc_name, static_doc_path_fn,
-          static=True)
+  def export_docs(self, export_dir):
+    for mfr in self._manufacturers.values():
+      mfr.export_docs(export_dir)
 
   def _add_factory(self,
                    cls,

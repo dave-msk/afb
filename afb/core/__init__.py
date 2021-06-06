@@ -19,7 +19,3 @@ from __future__ import print_function
 from afb.core.broker import Broker
 from afb.core.manufacturer import Manufacturer
 from afb.core.specs import ParameterSpec
-
-del absolute_import
-del division
-del print_function

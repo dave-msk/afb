@@ -1,4 +1,4 @@
-# Copyright 2019 Siu-Kei Muk (David). All Rights Reserved.
+# Copyright 2020 (David) Siu-Kei Muk. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.ext import app
+from afb.core.builtins_ import from_config
 
-del absolute_import
-del division
-del print_function
+FACTORY_MAKERS = {
+    "from-config": from_config.make_from_config,
+}

@@ -16,9 +16,4 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.core.static.registry import make_static_factories
-
-del absolute_import
-del division
-del print_function
-
+from afb.core.primitives.dict_lib._registry import FACTORIES

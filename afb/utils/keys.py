@@ -16,7 +16,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+SEP = "/"
+_RESERVED = "afb"
 
-class FactoryType(object):
-  STATIC = "afb_static_factories"
-  DYNAMIC = "afb_dynamic_factories"
+
+def is_reserved(name):
+  return name.split(SEP)[0] == _RESERVED
+
+
+def join(*args):
+  return SEP.join(args)
+
+
+def join_reserved(*args):
+  return join(_RESERVED, *args)

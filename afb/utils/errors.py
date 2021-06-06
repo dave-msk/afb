@@ -16,8 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.utils import types
-
 
 class StructMismatchError(Exception):
   pass
@@ -82,63 +80,63 @@ def validate_kwargs(obj, name):
                     .format(name, inv_keys))
 
 
-def validate_struct(type_spec, struct):
-  # `list` case
-  if isinstance(type_spec, list) and isinstance(struct, (list, tuple)):
-    for s in struct:
-      validate_struct(type_spec[0], s)
-    return
-
-  # `dict` case
-  if isinstance(type_spec, dict):
-    k_spec, v_spec = next(iter(type_spec.items()))
-    if isinstance(struct, dict):
-      for ks, vs in struct.items():
-        validate_struct(k_spec, ks)
-        validate_struct(v_spec, vs)
-      return
-    elif isinstance(struct, (list, tuple)):
-      valid = all((isinstance(pair, (list, tuple)) and len(pair) == 2)
-                  for pair in struct)
-      if not valid:
-        raise StructMismatchError("The input parameter for arguments of "
-                                  "nested `dict` must be either a `dict` or "
-                                  "a list/tuple of `(key_spec, value_spec)`. "
-                                  "Given: {}".format(struct))
-      for ks, vs in struct:
-        validate_struct(k_spec, ks)
-        validate_struct(v_spec, vs)
-      return
-
-  # `tuple` case
-  if isinstance(type_spec, tuple) and isinstance(struct, (list, tuple)):
-    if len(type_spec) != len(struct):
-      raise StructMismatchError("Length mismatch for tuple typed argument.\n"
-                                "Required Length: {}\n"
-                                "Given Length: {}"
-                                .format(len(type_spec), len(struct)))
-    for t_spec, s in zip(type_spec, struct):
-      validate_struct(t_spec, s)
-    return
-
-  # Direct type case
-  if isinstance(type_spec, type):
-    if (struct is None) or \
-       (isinstance(struct, type_spec)) or \
-       (types.is_obj_spec(struct)):
-      return
-    raise TypeError("The input must be one of the following:\n"
-                    "1. None; \n"
-                    "2. An instance of expected type; \n"
-                    "3. An object specification. (singleton `dict` mapping a "
-                    "factory to its arguments for instantiation)\n"
-                    "Expected Type: {}\nGiven: {}".format(type_spec, struct))
-
-  # None of the valid cases matches.
-  raise StructMismatchError("Input parameter structure must conform "
-                            "to type specification.\n"
-                            "Required: {}\nGiven: {}"
-                            .format(type_spec, struct))
+# def validate_struct(type_spec, struct):
+#   # `list` case
+#   if isinstance(type_spec, list) and isinstance(struct, (list, tuple)):
+#     for s in struct:
+#       validate_struct(type_spec[0], s)
+#     return
+#
+#   # `dict` case
+#   if isinstance(type_spec, dict):
+#     k_spec, v_spec = next(iter(type_spec.items()))
+#     if isinstance(struct, dict):
+#       for ks, vs in struct.items():
+#         validate_struct(k_spec, ks)
+#         validate_struct(v_spec, vs)
+#       return
+#     elif isinstance(struct, (list, tuple)):
+#       valid = all((isinstance(pair, (list, tuple)) and len(pair) == 2)
+#                   for pair in struct)
+#       if not valid:
+#         raise StructMismatchError("The input parameter for arguments of "
+#                                   "nested `dict` must be either a `dict` or "
+#                                   "a list/tuple of `(key_spec, value_spec)`. "
+#                                   "Given: {}".format(struct))
+#       for ks, vs in struct:
+#         validate_struct(k_spec, ks)
+#         validate_struct(v_spec, vs)
+#       return
+#
+#   # `tuple` case
+#   if isinstance(type_spec, tuple) and isinstance(struct, (list, tuple)):
+#     if len(type_spec) != len(struct):
+#       raise StructMismatchError("Length mismatch for tuple typed argument.\n"
+#                                 "Required Length: {}\n"
+#                                 "Given Length: {}"
+#                                 .format(len(type_spec), len(struct)))
+#     for t_spec, s in zip(type_spec, struct):
+#       validate_struct(t_spec, s)
+#     return
+#
+#   # Direct type case
+#   if isinstance(type_spec, type):
+#     if (struct is None) or \
+#        (isinstance(struct, type_spec)) or \
+#        (types.is_obj_spec(struct)):
+#       return
+#     raise TypeError("The input must be one of the following:\n"
+#                     "1. None; \n"
+#                     "2. An instance of expected type; \n"
+#                     "3. An object specification. (singleton `dict` mapping a "
+#                     "factory to its arguments for instantiation)\n"
+#                     "Expected Type: {}\nGiven: {}".format(type_spec, struct))
+#
+#   # None of the valid cases matches.
+#   raise StructMismatchError("Input parameter structure must conform "
+#                             "to type specification.\n"
+#                             "Required: {}\nGiven: {}"
+#                             .format(type_spec, struct))
 
 
 def validate_type_spec(type_spec):
@@ -156,11 +154,18 @@ def validate_type_spec(type_spec):
     return
   if isinstance(type_spec, type):
     return
-  raise ValueError("The type specification must be either of the following:\n"
-                   "1. Singleton `dict` where the key and value are both "
-                   "type specifications;\n"
-                   "2. Singleton `list`, where the content is a "
-                   "type specification; \n"
-                   "3. `tuple` of type specifications; or\n"
-                   "4. A class or type.\n"
-                   "Given: {}".format(type_spec))
+  raise SignatureError(
+      "The type specification must be either of the following:\n"
+      "1. Singleton `dict` where the key and value are both "
+      "type specifications;\n"
+      "2. Singleton `list`, where the content is a type specification; \n"
+      "3. `tuple` of type specifications; or\n"
+      "4. A class or type.\n"
+      "Given: {}".format(type_spec))
+
+
+def is_obj_spec(x):
+  if isinstance(x, dict) and len(x) == 1:
+    k, v = next(iter(x.items()))
+    return isinstance(k, str) and isinstance(v, dict)
+  return False

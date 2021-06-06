@@ -17,6 +17,7 @@ from __future__ import division
 from __future__ import print_function
 
 from afb.core import specs
+from afb.utils import misc
 
 
 def make_from_config(mfr):
@@ -24,7 +25,8 @@ def make_from_config(mfr):
       "config": specs.ParameterSpec(
           str,
           description="Config file in YAML/JSON, containing a single "
-                      'object specification for class "%s"' % mfr.cls.__name__),
+                      'object specification for class "%s"' % mfr.cls.__name__,
+          required=True),
   }
 
   def from_config(config):
@@ -43,7 +45,8 @@ def make_from_config(mfr):
     must contain a singleton dictionary that maps a factory name to its
     parameters.
     """
-    params = mfr._broker.make(dict, {"load_config": {"config": config}})  # pylint: disable=protected-access
-    return mfr._broker.make(mfr.cls, params)  # pylint: disable=protected-access
+    params = misc.load_config(config)
+    key, args = next(iter(params.items()))
+    return mfr.make(method=key, params=args)
 
   return {"factory": from_config, "signature": sig}

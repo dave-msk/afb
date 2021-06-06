@@ -16,16 +16,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.core.static import from_config
+from afb.core import specs
+from afb.utils import misc
 
 
-_STATIC_FACTORIES = {
-    "from_config": from_config.make_from_config,
-}
+# TODO: Change to generic json/yaml load
+def get_load_config():
+  sig = {
+      "config": specs.ParameterSpec(
+          str,
+          description="Path to configuration file containing a "
+                      "representation corresponding to a single `dict`."),
+  }
 
-
-def make_static_factories(mfr):
-  regs = []
-  for key, make_fct in _STATIC_FACTORIES.items():
-    regs.append(dict(key=key, **make_fct(mfr)))
-  return regs
+  return {"factory": misc.load_config, "signature": sig}
