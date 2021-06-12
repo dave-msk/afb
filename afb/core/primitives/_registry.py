@@ -37,3 +37,8 @@ def is_supported(cls):
 def create_mfr(cls):
   assert is_supported(cls)
   return _PrimitiveManufacturer(cls)
+
+
+def create_missing_mfrs(classes):
+  return [_PrimitiveManufacturer(cls)
+          for cls in _REGISTRY if cls not in classes]

@@ -244,6 +244,8 @@ class Broker(object):
   def export_docs(self, export_dir):
     for mfr in self._manufacturers.values():
       mfr.export_docs(export_dir)
+    for mfr in primitives.create_missing_mfrs(self._manufacturers):
+      mfr.export_docs(export_dir)
 
   def _add_factory(self,
                    cls,
