@@ -27,7 +27,8 @@ import warnings
 
 from afb.core import factory as fct_lib
 from afb.core import builtins_
-from afb.core import specs
+from afb.core.specs import obj_
+from afb.core.specs import type_
 from afb.utils import errors
 from afb.utils import fn_util
 from afb.utils import keys
@@ -596,49 +597,43 @@ class Manufacturer(object):
     return result
 
   def _create_exec_conf(self, method, args):
-    ts = specs.TypeSpec.create(self._cls)
+    ts = type_.TypeSpec.create(self._cls)
     iter_fn = fn_util.IterDfsOp(self._create_exec_conf_proc_fn)
     return iter_fn((ts, {method: args}))
 
   def _create_exec_conf_proc_fn(self, item):
-    ts_or_cls, args = item
+    ts_or_cls, obj_or_spec = item
     if ts_or_cls is None:
-      return args, fn_util.IterDfsOp.NONE
+      return obj_or_spec, misc.NONE
 
-    if isinstance(ts_or_cls, specs.TypeSpec):
+    if isinstance(ts_or_cls, type_.TypeSpec):
       fuse_fn = fn_util.FuseFnCallConf.partial(ts_or_cls.fuse_inputs)
-      stack_item = (fuse_fn, ts_or_cls.align_inputs(args))
-      return fn_util.IterDfsOp.NONE, stack_item
+      stack_item = (fuse_fn, ts_or_cls.parse_input_spec(obj_or_spec))
+      return misc.NONE, stack_item
 
     assert isinstance(ts_or_cls, type)
+    if obj_or_spec is None:
+      return obj_or_spec, misc.NONE
 
     cls = ts_or_cls
-    if args is None or isinstance(args, cls):
-      if (cls is not dict) or len(args or {}) != 1:
-        return args, fn_util.IterDfsOp.NONE
+    if obj_.is_direct_object(obj_or_spec, cls):
+      return obj_or_spec, misc.NONE
 
-    if not isinstance(args, dict) or len(args) != 1:
-      raise TypeError()
-      # raise TypeError(
-      #     "`spec` must be either:"
-      #     "1. An instance of the target type.\n"
-      #     "2. An object specification (singleton `dict` mapping a "
-      #     "factory to its arguments for instantiation).\n"
-      #     "Target Type: {}\nGiven: {}".format(cls, args))
+    assert isinstance(obj_or_spec, obj_.ObjectSpec)
 
     mfr = self._broker.get_or_create(ts_or_cls)
-
-    key, fct_args = next(iter(args.items()))
-    fct = mfr._get_factory(key)
+    fct = mfr._get_factory(obj_or_spec.key)
 
     if fct is None:
       if cls is dict:
-        return args, fn_util.IterDfsOp.NONE
+        return obj_or_spec.raw, misc.NONE
       # TODO: Invalid object spec
-      raise KeyError("No such factory for class {}: {}".format(cls, key))
+      raise KeyError(
+          "No such factory for class {}: {}".format(cls, obj_or_spec.key))
 
     fuse_fn = fn_util.FuseFnCallConf.partial(fct.call_as_fuse_fn)
-    return fn_util.IterDfsOp.NONE, (fuse_fn, fct.align_inputs(fct_args))
+    input_spec = fct.parse_inputs(obj_or_spec.inputs)
+    return misc.NONE, (fuse_fn, input_spec)
 
   def _all_factory_items(self):
     dynamic_keys = sorted(self._user_fcts)
@@ -775,5 +770,5 @@ def _prep_reg_args(key, registrant):
 
 def _exec_conf_proc_fn(item):
   if isinstance(item, fn_util.FuseFnCallConf):
-    return fn_util.IterDfsOp.NONE, (item, iter(item.args))
-  return item, fn_util.IterDfsOp.NONE
+    return misc.NONE, (item, iter(item.args))
+  return item, misc.NONE

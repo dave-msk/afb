@@ -7,13 +7,12 @@ import inspect
 import sys
 
 from afb.utils import errors
+from afb.utils import misc
 
 _PY_VERSION = (sys.version_info.major, sys.version_info.minor)
 
 
 class IterDfsOp(object):
-  NONE = object()
-
   def __init__(self, proc_fn):
     self._proc_fn = proc_fn
 
@@ -34,7 +33,7 @@ class IterDfsOp(object):
         continue
 
       cache_item, stack_item = self._proc_fn(item)
-      if cache_item is not IterDfsOp.NONE:
+      if cache_item is not misc.NONE:
         cache.append(cache_item)
       if isinstance(stack_item, tuple) and len(stack_item) == 2:
         fuse_fn, it = stack_item

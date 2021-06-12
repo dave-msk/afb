@@ -23,10 +23,10 @@ class Factory(object):
     self._long_desc = inspect.cleandoc(desc["long"])
     self._defaults = defaults or {}
 
-  def align_inputs(self, args):
-    assert args is None or isinstance(args, dict)
-    args = self.merge_inputs(**(args or {}))
-    for k, v in args.items():
+  def parse_inputs(self, inputs):
+    assert inputs is None or isinstance(inputs, dict)
+    inputs = self.merge_inputs(**(inputs or {}))
+    for k, v in inputs.items():
       yield None, k
       yield self._sig[k].type, v
 

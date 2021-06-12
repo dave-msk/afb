@@ -2,6 +2,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from afb.core.specs import obj_
+from afb.utils import const
 from afb.utils import fn_util
 from afb.utils import misc
 
@@ -12,7 +14,7 @@ class TypeSpec(object):
     iter_fn = fn_util.IterDfsOp(lambda item: item.markdown_proc_fn())
     return iter_fn(self)
 
-  def align_inputs(self, args):
+  def parse_input_spec(self, input_spec):
     raise NotImplementedError()
 
   def markdown_proc_fn(self):
@@ -32,9 +34,9 @@ class TypeSpec(object):
   @classmethod
   def _create_proc_fn(cls, item):
     if isinstance(item, cls):
-      return item, fn_util.IterDfsOp.NONE
+      return item, misc.NONE
     ts_cls = _TS_MAP[type(item)]
-    return fn_util.IterDfsOp.NONE, (ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
+    return misc.NONE, (ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
 
   @classmethod
   def fuse_inputs(cls, *args):
@@ -45,31 +47,36 @@ class TypeSpec(object):
     raise NotImplementedError()
 
   @classmethod
-  def fuse_subspecs(cls, *args):
+  def fuse_subspecs(cls, *specs):
     raise NotImplementedError()
 
 
 class _ClassTypeSpec(TypeSpec):
-
   def __init__(self, cls):
     self._cls = cls
+    self._is_dict = cls is dict
 
-  def align_inputs(self, args):
-    yield self._cls, args
+  def parse_input_spec(self, input_spec):
+    if obj_.is_direct_object(input_spec, self._cls):
+      yield self._cls, input_spec
+      return
+
+    obj_spec = obj_.ObjectSpec.parse(input_spec)
+    yield self._cls, obj_spec
 
   def markdown_proc_fn(self):
     md_str = "[%s]({%s})" % (self._cls.__name__,
                              misc.cls_to_qualname_id(self._cls))
-    return (md_str, {self._cls}), fn_util.IterDfsOp.NONE
+    return (md_str, {self._cls}), misc.NONE
 
   @classmethod
   def fuse_inputs(cls, *args):
     return args[0]
 
   @classmethod
-  def fuse_subspecs(cls, *args):
-    assert len(args) == 1 and isinstance(args[0], _ClassTypeSpec)
-    return args[0]
+  def fuse_subspecs(cls, *specs):
+    assert len(specs) == 1 and isinstance(specs[0], _ClassTypeSpec)
+    return specs[0]
 
   @classmethod
   def iter_raw(cls, raw_spec):
@@ -82,22 +89,25 @@ class _ListTypeSpec(TypeSpec):
   def __init__(self, entry_spec):
     self._ts = entry_spec
 
-  def align_inputs(self, args):
+  def parse_input_spec(self, input_spec):
     # TODO: Add type validation for `args`
-    return ((self._ts, arg) for arg in args)
+    if not isinstance(input_spec, (tuple, list)):
+      raise TypeError()
+    for spec in input_spec:
+      yield self._ts, spec
 
   def markdown_proc_fn(self):
-    stack_entry = (_MarkdownFuseFn("[%s]"), iter((self._ts,)))
-    return fn_util.IterDfsOp.NONE, stack_entry
+    stack_entry = (_MarkdownFuseFn("\\[%s\\]"), iter((self._ts,)))
+    return misc.NONE, stack_entry
 
   @classmethod
   def fuse_inputs(cls, *args):
     return args
 
   @classmethod
-  def fuse_subspecs(cls, *args):
-    assert len(args) == 1 and isinstance(args[0], TypeSpec)
-    return cls(args[0])
+  def fuse_subspecs(cls, *specs):
+    assert len(specs) == 1 and isinstance(specs[0], TypeSpec)
+    return cls(specs[0])
 
   @classmethod
   def iter_raw(cls, raw_spec):
@@ -109,15 +119,28 @@ class _DictTypeSpec(TypeSpec):
     self._ks = key_spec
     self._vs = value_spec
 
-  def align_inputs(self, args):
-    # TODO: Add type validation for `args`
-    for k, v in args.items():
+  def parse_input_spec(self, input_spec):
+    # TODO: Add type validation for `input_spec`
+    if isinstance(input_spec, dict):
+      iterable = input_spec.items()
+    elif isinstance(input_spec, (tuple, list)):
+      iterable = input_spec
+    else:
+      raise TypeError()
+
+    for pair in iterable:
+      if isinstance(pair, (tuple, list)) and len(pair) == 2:
+        k, v = pair
+      elif isinstance(pair, dict) and set(pair) == const.KEY_VALUE:
+        k, v = pair[const.KEY], pair[const.VALUE]
+      else:
+        raise TypeError()
       yield self._ks, k
       yield self._vs, v
 
   def markdown_proc_fn(self):
     fuse_fn = _MarkdownFuseFn("{%s: %s}")
-    return fn_util.IterDfsOp.NONE, (fuse_fn, iter((self._ks, self._vs)))
+    return misc.NONE, (fuse_fn, iter((self._ks, self._vs)))
 
   @classmethod
   def fuse_inputs(cls, *args):
@@ -125,9 +148,9 @@ class _DictTypeSpec(TypeSpec):
     return {args[i << 1]: args[(i << 1) + 1] for i in range(len(args) // 2, 2)}
 
   @classmethod
-  def fuse_subspecs(cls, *args):
-    assert len(args) == 2 and all(isinstance(ts, TypeSpec) for ts in args)
-    return cls(*args)
+  def fuse_subspecs(cls, *specs):
+    assert len(specs) == 2 and all(isinstance(ts, TypeSpec) for ts in specs)
+    return cls(*specs)
 
   @classmethod
   def iter_raw(cls, raw_spec):
@@ -137,28 +160,31 @@ class _DictTypeSpec(TypeSpec):
 
 
 class _TupleTypeSpec(TypeSpec):
-
   def __init__(self, *entry_specs):
     self._specs = entry_specs
+    self._num_elements = len(entry_specs)
 
-  def align_inputs(self, args):
+  def parse_input_spec(self, input_spec):
     # TODO: Add type validation for `args`
-    for pair in zip(self._specs, args):
+    if (not isinstance(input_spec, (tuple, list)) or
+        len(input_spec) != self._num_elements):
+      raise TypeError()
+    for pair in zip(self._specs, input_spec):
       yield pair
 
   def markdown_proc_fn(self):
     md_str = "(%s)" % ", ".join("%s" for _ in self._specs)
     fuse_fn = _MarkdownFuseFn(md_str)
-    return fn_util.IterDfsOp.NONE, (fuse_fn, iter(self._specs))
+    return misc.NONE, (fuse_fn, iter(self._specs))
 
   @classmethod
   def fuse_inputs(cls, *args):
     return tuple(args)
 
   @classmethod
-  def fuse_subspecs(cls, *args):
-    assert len(args) and all(isinstance(ts, TypeSpec) for ts in args)
-    return cls(*args)
+  def fuse_subspecs(cls, *specs):
+    assert len(specs) and all(isinstance(ts, TypeSpec) for ts in specs)
+    return cls(*specs)
 
   @classmethod
   def iter_raw(cls, raw_spec):
@@ -167,7 +193,6 @@ class _TupleTypeSpec(TypeSpec):
 
 
 class _MarkdownFuseFn(object):
-
   def __init__(self, fmt):
     self._fmt = fmt
 
