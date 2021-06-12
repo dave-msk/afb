@@ -9,7 +9,69 @@ from afb.utils import misc
 
 
 class TypeSpec(object):
+  """Type specification of parameter.
 
+  This class is an abstraction of parameter types for a factory. The expected
+  type of each parameter of a factory has to be specified for `afb` to look for
+  the right `Manufacturer` in the inputs preparation stage.
+
+  The type specification (type spec) has the following grammar:
+
+  CTS := class
+  LTS := [TS]
+  DTS := {TS: TS}
+  TTS := (TS, ..., TS)
+  TS  := CTS | LTS | DTS | TTS
+
+  In detail, a type spec can be one of the following:
+
+    * CTS: Any class or type (e.g.: `str`, `MyClass`, ...)
+    * LTS: A singleton list of a type spec (e.g.: `[MyClass]`, `[{str: int}]`,
+           ...). This means the parameter is a homogeneous list of objects of
+           type specified by the containing spec.
+    * DTS: A singleton dictionary with both the key and value being a type spec
+           (e.g.: `{MyClass1: [int]}`, `{str: MyClass2}`, ...). This means the
+           parameter is a homogeneous dictionary with keys and values conforming
+           to the key and value type specs respectively.
+    * TTS: A tuple of type specs (e.g.: ([int], {str: MyClass}), ...).
+           This means the parameter is a tuple of objects with each element
+           conforms to the type spec at its corresponding position.
+
+  Each kind of type spec corresponds to a particular form of input, called
+  Input Specification, which the argument must conform to. It has the following
+  grammar:
+
+  OIS := instance | {key: inputs} | {"key": key, "inputs": inputs}
+  LIS := [IS, ...]
+  DIS := {IS_k: IS_v, ...} | [{"key": IS_k, "value": IS_v}, ...]
+  TIS := (IS, ..., IS)
+  IS  := OIS | LIS | DIS | TIS
+
+  The following describes the input spec that corresponds to each kind of
+  type spec above:
+
+    * OIS: (CTS) Either of the following:
+      * An instance of the target class
+      * A singleton dictionary with the factory key as key, and a dictionary
+        mapping each parameter to its input spec for the factory as value.
+      * A dictionary with two items:
+        * `"key"`: Factory key.
+        * `"inputs"`: Dictionary mapping each parameter to its input spec.
+    * LIS: (LTS) A list / tuple of arbitrary length of object specs of the
+           element type spec.
+    * DIS: (DTS) Either of the following:
+      * A dictionary of arbitrary length with keys and values being input specs
+        for the key and value type spec respectively.
+      * A list / tuple of dictionaries each with the following items:
+        * `"key"`: Input spec for the key.
+        * `"value"`: Input spec for the value.
+    * TIS: (TTS) A list / tuple of input specs each conforms to its
+           corresponding type spec. Each TS in the original TTS MUST have
+           an input spec.
+
+  This is the base class of the certain kind of type specs described above.
+  DO NOT instantiate the classes directly, use `TypeSpec.create` instead.
+  """
   def markdown_tmpl(self):
     iter_fn = fn_util.IterDfsOp(lambda item: item.markdown_proc_fn())
     return iter_fn(self)
