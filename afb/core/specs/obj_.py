@@ -28,6 +28,8 @@ class ObjectSpec(object):
 
   @classmethod
   def parse(cls, spec):
+    if isinstance(spec, cls):
+      return spec
     if not is_object_spec(spec):
       # TODO: Define parse error and raise here
       raise TypeError()
@@ -45,6 +47,7 @@ def is_direct_object(obj, cls):
 
 def is_object_spec(obj):
   """Shallow format check"""
+  if isinstance(obj, ObjectSpec): return True
   if not isinstance(obj, dict): return False
   l = len(obj)
   if l not in (1, 2): return False
