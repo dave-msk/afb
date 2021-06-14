@@ -30,23 +30,13 @@ class LazyPropery(object):
     return obj.__dict__[self.name]
 
 
-def lazyprop(func):
-  """Decorator that makes a property lazy-evaluated.
-
-  Credits go to Aran-Frey on StackOverflow:
-  https://stackoverflow.com/questions/3012421/python-memoising-deferred-lookup-property-decorator
-
-  Args:
-    func: Zero-argument method to be decorated as lazy property.
-
-  Returns:
-    Lazy property that takes value from `func`.
+class SetterProperty(object):
   """
-  attr_name = "_lazy_" + func.__name__
+  # TODO: Add descriptions. From https://stackoverflow.com/questions/17576009/python-class-property-use-setter-but-evade-getter
+  """
+  def __init__(self, function):
+    self.function = function
+    self.__doc__ = function.__doc__
 
-  @property
-  def _lazy_property(self):
-    if not hasattr(self, attr_name):
-      setattr(self, attr_name, func(self))
-    return getattr(self, attr_name)
-  return _lazy_property
+  def __set__(self, obj, value):
+    return self.function(obj, value)

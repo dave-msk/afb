@@ -144,6 +144,11 @@ class Manufacturer(object):
   def cls(self):
     return self._cls
 
+  @decorators.SetterProperty
+  def _bind(self, broker):
+    # TODO: Add warning or raise error if not called internally
+    self._broker = broker
+
   @property
   def default(self):
     return self._default
