@@ -99,11 +99,11 @@ FnArgSpec.from_fn = _from_fn
 
 
 def maybe_call(obj_or_fn, cls):
-  obj = None
-  if isinstance(obj_or_fn, cls):
-    obj = obj_or_fn
-  elif callable(obj_or_fn) and len(_from_fn(obj_or_fn).parameters) == 0:
-    obj = obj_or_fn()
+  obj = obj_or_fn
+  if (not isinstance(obj_or_fn, cls) and
+      callable(obj_or_fn) and
+      len(_from_fn(obj_or_fn).parameters) == 0):
+    obj = obj()
 
   if isinstance(obj, cls):
     return obj
