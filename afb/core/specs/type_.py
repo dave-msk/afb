@@ -116,7 +116,6 @@ class TypeSpec(object):
 class _ClassTypeSpec(TypeSpec):
   def __init__(self, cls):
     self._cls = cls
-    self._is_dict = cls is dict
 
   def parse_input_spec(self, input_spec):
     if obj_.is_direct_object(input_spec, self._cls):
