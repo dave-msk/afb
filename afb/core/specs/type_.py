@@ -101,7 +101,7 @@ class TypeSpec(object):
     return misc.NONE, (ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
 
   @classmethod
-  def fuse_inputs(cls, *args):
+  def fuse_inputs(cls, *inputs):
     raise NotImplementedError()
 
   @classmethod
@@ -132,8 +132,8 @@ class _ClassTypeSpec(TypeSpec):
     return (md_str, {self._cls}), misc.NONE
 
   @classmethod
-  def fuse_inputs(cls, *args):
-    return args[0]
+  def fuse_inputs(cls, *inputs):
+    return inputs[0]
 
   @classmethod
   def fuse_subspecs(cls, *specs):
@@ -163,8 +163,8 @@ class _ListTypeSpec(TypeSpec):
     return misc.NONE, stack_entry
 
   @classmethod
-  def fuse_inputs(cls, *args):
-    return args
+  def fuse_inputs(cls, *inputs):
+    return inputs
 
   @classmethod
   def fuse_subspecs(cls, *specs):
@@ -205,9 +205,10 @@ class _DictTypeSpec(TypeSpec):
     return misc.NONE, (fuse_fn, iter((self._ks, self._vs)))
 
   @classmethod
-  def fuse_inputs(cls, *args):
-    assert not len(args) & 1
-    return {args[i << 1]: args[(i << 1) + 1] for i in range(len(args) // 2, 2)}
+  def fuse_inputs(cls, *inputs):
+    assert not len(inputs) & 1
+    return {inputs[i << 1]: inputs[(i << 1) + 1]
+            for i in range(len(inputs) // 2, 2)}
 
   @classmethod
   def fuse_subspecs(cls, *specs):
