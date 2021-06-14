@@ -25,10 +25,13 @@ import tempfile
 import threading
 import warnings
 
+import deprecated as dp
+
 from afb.core import factory as fct_lib
 from afb.core import builtins_
 from afb.core.specs import obj_
 from afb.core.specs import type_
+from afb.utils import decorators
 from afb.utils import errors
 from afb.utils import fn_util
 from afb.utils import keys
@@ -45,18 +48,17 @@ class Manufacturer(object):
   factory, after which the factory is called.
 
   An object can be created by calling the `make` method. This method accepts
-  two arguments: `method` and `params`.
+  two arguments: `key` and `inputs`.
 
-    method: The string key of the target factory.
-    params: A keyword argument dictionary for the factory. This dictionary can
-            be nested for any parameter that requires an object to be created
-            through another manufacturer.
+    * key: The string key of the target factory.
+    * inputs: A dictionary of keyword arguments for the factory. This dictionary
+              can be nested for any parameter that requires an object to be
+              created through another factory.
 
   The arguments of the target factory may require objects other than the
   primitive types (such as `int`, `float`, `bool` and `str`). In such case,
-  a singleton dictionary with method name as key and a dictionary of parameters
-  as value, is expected for this parameter entry.
-  For example, we have two classes below:
+  an **Input Specification** is required. See the detailed explanation described
+  in the `TypeSpec`. For example, we have two classes below:
 
   ```python
   class A(object):
@@ -82,10 +84,12 @@ class Manufacturer(object):
   ```python
   # Define manufacturer for class A.
   mfr_a = Manufacturer(A)
+  # Register a factory to mfr_a. Here, constructor of A is registered as factory
   mfr_a.register("create", A, {"u": float})
 
   # Define manufacturer for class B.
   mfr_b = Manufacturer(B)
+  # Register a factory to mfr_b. Here, constructor of B is registered as factory
   mfr_b.register("create", B, {"a": A, "z": float})
   ```
 
@@ -101,27 +105,44 @@ class Manufacturer(object):
   broker.register(mfr_b)
   ```
 
+  > **Note:** From 1.4.0, the create and registration of `Manufacturer` can be
+  done by `mfr = broker.get_or_create(cls)` directly.
+
   There are two ways the B object can be created:
 
   1. A direct call through `Manufacturer.make`:
 
     ```python
-    params = {"a": {"create": {"u": 37.0}},
-              "z": -41.0}
+    inputs = {
+      "a": {
+        "create": {
+          "u": 37.0,
+        },
+      },
+      "z": -41.0,
+    }
 
-    b = mfr_b.make(method="create", params=params)
+    b = mfr_b.make(key="create", inputs=inputs)
     ```
 
-  2. A call through `Broker.make`. In this way, we need to wrap the `method` and
-     `params` to a single dictionary. Note that the target class is also
+  2. A call through `Broker.make`. In this way, we need to wrap the `key` and
+     `inputs` to a single dictionary. Note that the target class is also
      required for the broker to choose the right manufacturer.
 
     ```python
-    params = {"create":  # Factory key w.r.t manufacturer B
-              {"a": {"create":  # Factory key w.r.t manufacturer A
-                     {"u": 37.0}},
-               "z": -41.0}}
-    b = broker.make(cls=B, params=params)
+    spec = {
+      # Factory key w.r.t manufacturer B
+      "create": {
+        "a": {
+          # Factory key w.r.t manufacturer A
+          "create": {
+            "u": 37.0,
+          },
+        },
+        "z": -41.0,
+      },
+    }
+    b = broker.make(cls=B, spec=spec)
     ```
   """
 
@@ -129,8 +150,11 @@ class Manufacturer(object):
     """Creates a manufacturer for a class.
 
     Args:
-      cls: The intended output class.
+      cls: The target class.
     """
+    if not isinstance(cls, type):
+      raise TypeError("`cls` must be a type. Given: {}".format(type(cls)))
+
     self._cls = cls
     self._lock = threading.RLock()
     self._broker = None
@@ -154,18 +178,25 @@ class Manufacturer(object):
     return self._default
 
   @default.setter
-  def default(self, method):
+  def default(self, key):
     with self._lock:
-      self._wrap_error(lambda: errors.validate_type(method, str, "method"))
-      if self._get_factory(method) is None:
-        self._raise_error(ValueError,
-                          "The method with key `{}` not found.".format(method))
-      self._default = method
+      self._wrap_error(lambda: errors.validate_type(key, str, "key"))
+      if key is not None and self.get(key) is None:
+        self._raise_error(KeyError, "Factory not found: {}".format(key))
+      self._default = key
 
+  # TODO: Mark as deprecated.
   @property
   def factories(self):
     return copy.deepcopy(self._user_fcts)
 
+  def keys(self):
+    return self._user_fcts.keys()
+
+  def __contains__(self, key):
+    return key in self._builtin_fcts or key in self._user_fcts
+
+  # TODO: Mark deprecated. v=1.5.0, use `in` operator instead.
   def has_method(self, key):
     return key in self._builtin_fcts or key in self._user_fcts
 
@@ -173,11 +204,11 @@ class Manufacturer(object):
     for k, make_fct in builtins_.FACTORY_MAKERS.items():
       self._register(keys.join_reserved(k), _builtins=True, **make_fct(self))
 
-  def _get_factory(self, key):
-    if key is None: key = self._default
+  def get(self, key):
     reg = self._builtin_fcts if keys.is_reserved(key) else self._user_fcts
     return reg.get(key)
 
+  # TODO: Mark `force` as deprecated. Use `override` instead.
   def merge(self,
             mfr,
             root=None,
@@ -187,32 +218,34 @@ class Manufacturer(object):
             force=None):
     """Merge another manufacturer of the same type.
 
-    This method registers all the factories from the given Manufacturer.
+    This method registers all the factories from the given `Manufacturer`.
     The resulting key of the merged factories will have the following form:
 
-      * "root<sep><method_name>"
+      * "root<sep><factory_key>"
 
-    For instance, using the default `sep="/"`, the factory key becomes:
+    For instance, using the default `sep="/"`, the merged factory key becomes:
 
-      * "root/<method_name>"
+      * "root/<factory_key>"
 
     This allows convenient grouping of factories by context, without the need
-    to hard-code the path-like key at the time of registration. If `key` is
-    `None`, the original method name is used.
+    to hard-code the path-like key at registration. If `root` is `None`, the
+    original method name is used.
 
     Args:
-      mfr: `Manufacturer` or a zero-argument function that returns one.
+      mfr: `Manufacturer` or a zero-argument function that returns an
+        instance of it.
       root: A string that serves as the root of the factories from `mfr`.
-        If None, the original method name will be used directly.
-      override: If True, overwrites the original factory registration in case of
-        key collision. Defaults to False. See `raise_on_collision` for
-        collision handling if not `override`.
-      ignore_collision: If True, the factory key collision is ignored when
-        `override` is False, and the original factory is preserved. Otherwise,
-        an error would be raised. Defaults to False.
-      force: Deprecated. Use `override` instead.
+        If None, the original factory will be used directly.
+      override: If True, overwrites the original factory in case of key
+        collision. Defaults to False. See `ignore_collision` for collision
+        handling when `override` is False.
+      ignore_collision: Will only take effect when `override` is False.
+        If True, the factory key collision is ignored, i.e. the original factory
+        is preserved. Otherwise, an error would be raised. Defaults to False.
       sep: Separator between root and method name in the resulting factory key.
         Defaults to "/".
+      force: Deprecated. Use `override` instead. If specified, this overrides
+        `override` for backwards compatibility.
 
     Raises:
       KeyError:
@@ -220,17 +253,14 @@ class Manufacturer(object):
       TypeError:
         - `mfr` is not a `Manufacturer` nor a zero-argument function that
             returns an instance of it.
-        - Output class of `mfr` is not a subclass of this output class.
+        - Target of `mfr` is not a subclass of this target.
     """
     if force is not None:
       # TODO: Add deprecation warning
       override = force
-    mfr = fn_util.maybe_call(mfr, Manufacturer)  # TODO: Investigate
-    if mfr is None:
-      self._raise_error(TypeError,
-                        "\"mfr\" must be either a `Manufacturer` or a "
-                        "zero-argument function that returns an instance of it."
-                        " Given: {}".format(mfr))
+    mfr = self._wrap_error(lambda: fn_util.maybe_call(mfr, Manufacturer),
+                           prefix="Invalid `mfr`: ")
+
     self._validate_merge(mfr, root, override, ignore_collision, sep)
     self._merge(root,
                 mfr,
@@ -238,6 +268,7 @@ class Manufacturer(object):
                 ignore_collision=ignore_collision,
                 sep=sep)
 
+  # TODO: Mark `force` as deprecated. Use `override` instead
   def merge_all(self,
                 mfr_dict,
                 override=False,
@@ -257,8 +288,8 @@ class Manufacturer(object):
         an error would be raised. Defaults to False.
       sep: Separator between root and method name in the resulting factory key.
         Defaults to "/". See `Manufacturer.merge` for details.
-      force: If `True`, overwrites the existing factory (if any). If `False`,
-        raises ValueError if `key` is already registered. Defaults to `False`.
+      force: Deprecated. Use `override` instead. If specified, this overrides
+        `override` for backwards compatibility.
 
     Raises:
       KeyError:
@@ -266,7 +297,7 @@ class Manufacturer(object):
       TypeError:
         - `mfr` is not a `Manufacturer` nor a zero-argument function that
             returns one.
-        - Output class of `mfr` is not a subclass of this output class.
+        - Target of `mfr` is not a subclass of this target.
     """
     if force is not None:
       # TODO: Add deprecation warning
@@ -286,8 +317,9 @@ class Manufacturer(object):
                   sep=sep)
 
   def _merge(self, root, mfr, override=False, ignore_collision=True, sep="/"):
-    for key, fct in mfr.factories.items():
+    for key in mfr.keys():
       key = _merged_name(root, key, sep=sep)
+      fct = mfr.get(key)
       try:
         self._register(key=key,
                        factory=fct,
@@ -299,10 +331,13 @@ class Manufacturer(object):
           continue
         raise
 
+  # TODO: Mark deprecated.
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
     self._broker = broker
 
+  # TODO: Mark `params` and `force` as deprecated.
+  #   Use `defaults` and `override` instead.
   def register(self,
                key,
                factory,
@@ -325,7 +360,7 @@ class Manufacturer(object):
     The required signature is a `dict` mapping in the following format:
 
       {
-        <arg-name>: `ParameterSpec` (or its raw format) / Type Specification,
+        <parameter>: `ParameterSpec` (or its raw format) / Type Specification,
         ...
       }
 
@@ -334,11 +369,11 @@ class Manufacturer(object):
       {
         "type": Type Specification,
         "description": (optional) "Description of the argument",
-        "forced": (optional) True / False (default)
+        "required": (optional) True / False (default)
       }
 
     The description will be rendered in the exported documentation.
-    The `forced` switch indicates whether the argument should be registered
+    The `required` switch indicates whether the parameter should be registered
     as required. If `True`, the argument is required by when calling this
     factory through `Manufacturer.make`. If `False`, its requirement will be
     inferred from the factory's raw signature.
@@ -351,7 +386,8 @@ class Manufacturer(object):
       - A class or type.
 
     For example, the type specification of a dict mapping a string to
-    `TestClass` objects would be `{str: TestClass}`.
+    `TestClass` objects would be `{str: TestClass}`. See `TypeSpec` for
+    detailed description.
 
     ----------------------------------------------------------------------------
 
@@ -378,8 +414,8 @@ class Manufacturer(object):
         5. `descriptions` contains any keys not from `("short", "long")`.
       TypeError:
         1. `key` is not a string.
-        2. `sig` is not a dict with string keys.
-        3. `params` is not a dict with string keys.
+        2. `signature` is not a dict with string keys.
+        3. `defaults` is not a dict with string keys.
         4. `descriptions` contains non-string values.
     """
     if force is not None:
@@ -395,57 +431,73 @@ class Manufacturer(object):
                    descriptions=descriptions,
                    override=override)
 
+  # TODO: Mark `keyword_mode` as deprecated. Not used anymore
   def register_dict(self, registrants, keyword_mode=None):
     """Registers factories from dictionary.
 
     This method allows a dictionary of factories to be registered at once.
-    The argument is expected to be a dictionary that maps the method name
-    for the factory to a zero-argument function returns either a tuple in
-    non-keyword mode:
+    The argument is expected to be a dictionary that maps factory keys to
+    arguments for the `Manufacturer.register` call, either in tuple or
+    dictionary, or a zero-argument function that returns either of them.
+    For instance, the value can be a tuple:
 
-        (factory, signature, default_params (optional), descriptions (optional))
+        (factory, signature,
+         defaults (optional), descriptions (optional), override (optional))
 
-    Or a dictionary in keyword mode:
+    Or a dictionary:
 
         {"factory": factory,            # required
          "signature": signature,        # required
-         "params": default_params,      # optional
-         "descriptions": descriptions}  # optional
+         "defaults": defaults,          # optional
+         "descriptions": descriptions,  # optional
+         "override": override}          # optional
+
+    Or a zero-argument function that returns either of the above.
 
     A typical pattern one would encounter is to have a dictionary as a registry
     to manage a group of factories as "plugin"s, so that whenever a new
     factory is implemented it can be made available for the manufacturer to
     call by adding it in the dictionary. For example:
 
-    In `registry.py`:
+    `registry.py`
     ```python
     from . import factories as fct
 
     REGISTRY = {
       "create": fct.create.get_create,
-      "load": fct.load.get_load
+      "load": fct.load.get_load,
     }
     ```
 
-    whereas in `factories/create.py`:
+    `factories/create.py`:
     ```python
-
     def create(arg_1, arg_2, arg_3=True):
       ...
       return obj
 
     def get_create():
       sig = {
-        "arg_1": str,
-        "arg_2": [int],
-        "arg_3": bool
+          "arg_1": {
+              "type": str,
+              "description": "Some string",
+              "required": True,
+          },
+          "arg_2": {
+              "type": [int],
+              "description": "List of ints",
+              "required": True,
+          },
+          "arg_3": {
+              "type": bool,
+              "description": "Some boolean",
+              "required": False,
+          },
       }
       return create, sig, {"arg_1": "Hello World!", "arg_2": [1, -1, 0]}
     ```
 
-    and in `factories/load.py`:
+    `factories/load.py`:
     ```python
-
     def load(filename, mode):
       ...
       return obj
@@ -461,22 +513,10 @@ class Manufacturer(object):
     The `REGISTRY` can then be passed to its manufacturer for registration.
 
     Args:
-      registrants: A dictionary that maps a method name to a zero-argument
-        function that returns:
-
-        * Non-keyword mode - A tuple:
-
-          (factory, signature, default_params (opt), descriptions (opt))
-
-        * Keyword mode - A dictionary:
-
-          {"factory": factory,            # required
-           "signature": signature,        # required
-           "params": default_params,      # optional
-           "descriptions": descriptions}  # optional
-
-      keyword_mode: Boolean. Indicates the mode in which to perform factory
-        registrations. See above.
+      registrants: A dictionary that maps each factory key to its
+        `Manufacturer.register` call arguments (or zero-argument function that
+        returns it).
+      keyword_mode: Deprecated. Has no effect at all.
     """
     if keyword_mode is not None:
       # TODO: Add deprecation warning
@@ -504,11 +544,11 @@ class Manufacturer(object):
       pass
 
     if signature is None and isinstance(factory, fct_lib.Factory):
+      # This block is for Manufacturer merges
       with self._lock:
         if key in self._user_fcts and not override:
-          raise self._raise_error(ValueError,
-                                  "The method `{}` is already registered."
-                                  .format(key))
+          self._raise_error(
+              ValueError, "The factory `{}` is already registered.".format(key))
         self._user_fcts[key] = factory
       return
 
@@ -523,7 +563,7 @@ class Manufacturer(object):
     if not isinstance(signature, dict):
       raise self._raise_error(
           TypeError,
-          "Method: {}\n`signature` must be a dict mapping factory arguments to "
+          "Key: {}\n`signature` must be a dict mapping factory arguments to "
           "their parameter specification, or (deprecated) type specification."
           .format(key))
 
@@ -535,12 +575,12 @@ class Manufacturer(object):
     with self._lock:
       if key in registry:
         if not override:
-          raise self._raise_error(ValueError,
-                                  "The method `{}` is already registered."
-                                  .format(key))
+          self._raise_error(
+              ValueError, "The factory `{}` is already registered.".format(key))
         # TODO: Add a warning
       if not isinstance(factory, fct_lib.Factory):
-        factory = fct_lib.Factory(factory,
+        factory = fct_lib.Factory(self._cls,
+                                  factory,
                                   signature,
                                   descriptions=descriptions,
                                   defaults=defaults)
@@ -564,8 +604,9 @@ class Manufacturer(object):
 
     Raises:
       ValueError:
-        1. `key` is not registered.
-        2. `inputs` contains invalid keyword arguments.
+        1. `key` and `default` both not given.
+        2. `key` is not registered.
+        3. `inputs` contains invalid keyword arguments.
 
       TypeError:
         1. `inputs` is not a dictionary.
@@ -574,37 +615,31 @@ class Manufacturer(object):
     if method is not None:
       # TODO: Add deprecation warning
       key = method
+
+    key = self.default if key is None else key
+    if key is None:
+      raise ValueError()
+
     if params is not None:
       # TODO: Add deprecation warning
       inputs = params
     return self._make(key, inputs)
 
   def _make(self, key, inputs):
-    # 0. Sanity check
-    key = key or self.default
-    fct = self._get_factory(key)
+    fct = self.get(key)
     if fct is None:
-      raise self._raise_error(ValueError,
-                              "Unregistered key: {}".format(key))
+      self._raise_error(ValueError, "Unregistered key: {}".format(key))
 
-    self._wrap_error(lambda: errors.validate_kwargs(inputs, "inputs"),
-                     key=key)
+    self._wrap_error(lambda: errors.validate_kwargs(inputs, "inputs"), key=key)
     conf = self._create_exec_conf(key, inputs)
 
     iter_fn = fn_util.IterDfsOp(_exec_conf_proc_fn)
-    result = iter_fn(conf)
+    return iter_fn(conf)
 
-    if result is not None and not isinstance(result, self.cls):
-      raise self._raise_error(TypeError,
-                              "Registered factory with key `{}` does not "
-                              "return a `{}` object."
-                              .format(key, self.cls.__name__))
-    return result
-
-  def _create_exec_conf(self, method, args):
+  def _create_exec_conf(self, key, inputs):
     ts = type_.TypeSpec.create(self._cls)
     iter_fn = fn_util.IterDfsOp(self._create_exec_conf_proc_fn)
-    return iter_fn((ts, {method: args}))
+    return iter_fn((ts, {key: inputs}))
 
   def _create_exec_conf_proc_fn(self, item):
     ts_or_cls, obj_or_spec = item
@@ -620,25 +655,24 @@ class Manufacturer(object):
     if obj_or_spec is None:
       return obj_or_spec, misc.NONE
 
-    cls = ts_or_cls
-    if obj_.is_direct_object(obj_or_spec, cls):
+    if obj_.is_direct_object(obj_or_spec, ts_or_cls):
       return obj_or_spec, misc.NONE
 
     assert isinstance(obj_or_spec, obj_.ObjectSpec)
 
     mfr = self._broker.get_or_create(ts_or_cls)
-    fct = mfr._get_factory(obj_or_spec.key)
+    fct = mfr.get(obj_or_spec.key)
 
     if fct is None:
-      if cls is dict:
+      if ts_or_cls is dict:
         return obj_or_spec.raw, misc.NONE
       # TODO: Invalid object spec
       raise KeyError(
-          "No such factory for class {}: {}".format(cls, obj_or_spec.key))
+          "No such factory for class {}: {}".format(ts_or_cls, obj_or_spec.key))
 
     fuse_fn = fn_util.FuseFnCallConf.partial(fct.call_as_fuse_fn)
-    input_spec = fct.parse_inputs(obj_or_spec.inputs)
-    return misc.NONE, (fuse_fn, input_spec)
+    inputs_iter = fct.parse_inputs(obj_or_spec.inputs)
+    return misc.NONE, (fuse_fn, inputs_iter)
 
   def _all_factory_items(self):
     dynamic_keys = sorted(self._user_fcts)
@@ -708,7 +742,7 @@ class Manufacturer(object):
                               .format(type(mfr)))
     if not issubclass(mfr.cls, self.cls):
       raise self._raise_error(TypeError,
-                              "The output class of `mfr` must be a subclass of "
+                              "The target class of `mfr` must be a subclass of "
                               "{}, given: {}".format(self.cls, mfr.cls))
 
     if override or ignore_collision:
@@ -719,7 +753,7 @@ class Manufacturer(object):
     collisions = merged_names.intersection(self._user_fcts)
     if collisions:
       raise self._raise_error(KeyError,
-                              "Method key conflicts occurred: {}. "
+                              "Factory key conflicts occurred: {}. "
                               "Please use another key for merge instead"
                               .format(sorted(collisions)))
 
@@ -730,8 +764,8 @@ class Manufacturer(object):
       e = sys.exc_info()
       message = str(e[1])
       if key: message = "Factory: {}\n{}".format(key, message)
-      if prefix: message = "%s\n%s" % (prefix, message)
-      if suffix: message = "%s\n%s" % (message, suffix)
+      if prefix: message = "%s%s" % (prefix, message)
+      if suffix: message = "%s%s" % (message, suffix)
       self._raise_error(e[0], message)
 
   def _raise_error(self, err_type, message):
@@ -740,30 +774,27 @@ class Manufacturer(object):
     raise err_type(message)
 
 
-_reg_argspec = fn_util.FnArgSpec.from_fn(Manufacturer.register)
+_reg_params = fn_util.FnArgSpec.from_fn(Manufacturer.register).parameters[2:]
 
 
 def _merged_name(root, name, sep="/"):
-  return "%s%s%s" % (root, sep, name) if root else name
+  return name if root is None else "%s%s%s" % (root, sep, name)
 
 
 def _prep_reg_args(key, registrant):
   if callable(registrant):
     registrant = registrant()
 
-  _reg_params = _reg_argspec.parameters[2:]
   if isinstance(registrant, dict):
     registrant = dict(registrant)
   elif isinstance(registrant, (tuple, list)):
     registrant = {kw: arg for kw, arg in zip(_reg_params, registrant)}
-
-  if not isinstance(registrant, dict):
+  else:
     raise TypeError()
 
   if "sig" in registrant:
     # TODO: Add compatibility warning
-    registrant["signature"] = registrant["sig"]
-    del registrant["sig"]
+    registrant["signature"] = registrant.pop("sig")
 
   if any(p not in set(_reg_params) for p in registrant):
     invalids = sorted(set(registrant) - set(_reg_params))
