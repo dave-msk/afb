@@ -13,8 +13,11 @@ from afb.utils import fn_util
 
 
 class Factory(object):
-  def __init__(self, fn, signature, descriptions=None, defaults=None):
+  def __init__(self, cls, fn, signature, descriptions=None, defaults=None):
     # TODO: Check if `factory` is callable
+    assert isinstance(cls, type)
+
+    self._cls = cls
     self._fn = fn
     self._rqd, self._sig = _format_signature(fn, signature)
     self._all_args = set(self._sig)
@@ -104,7 +107,10 @@ class Factory(object):
     return self._long_desc
 
   def __call__(self, **kwargs):
-    return self._fn(**kwargs)
+    instance = self._fn(**kwargs)
+    if not isinstance(instance, self._cls):
+      raise TypeError()
+    return instance
 
 
 def _format_signature(fn, signature):
