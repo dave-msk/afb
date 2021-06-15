@@ -4,8 +4,10 @@ from __future__ import print_function
 
 import collections
 import inspect
+import os.path
 import sys
 
+from afb.utils import const
 from afb.utils import errors
 from afb.utils import misc
 
@@ -110,4 +112,19 @@ def maybe_call(obj_or_fn, cls):
 
   raise TypeError(
       "A `{}` or a zero-argument function that returns an instance "
-      "of it is expected. Given: {}".format(cls.__name__, obj_or_fn))
+      "of it is expected. Given: {}".format(misc.cls_fullname(cls), obj_or_fn))
+
+
+def call_from_file(depth=0):
+  f = inspect.currentframe().f_back
+  for _ in range(depth):
+    parent = f.f_back
+    if parent is None: break
+    f = parent
+  return os.path.abspath(f.f_code.co_filename)
+
+
+def is_called_internally(depth=1):
+  call_file = call_from_file(depth=depth)
+  return (call_file.startswith(const.AFB_ROOT) and
+          call_file[len(const.AFB_ROOT)] == os.path.sep)
