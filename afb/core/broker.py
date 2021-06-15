@@ -31,83 +31,101 @@ class Broker(object):
 
   The Broker serves as a switch box / proxy that delegates the object creation
   to the corresponding manufacturer. Each registered manufacturer is identified
-  by their intended output object class. The Broker registers itself to each of
-  the manufacturers in their registration, so that the manufacturers could
-  forward the object creation during preparation of input parameters to the
-  target factory.
+  by their target class. The Broker binds itself to each of the manufacturers
+  in their registration, so that the manufacturers could get factories of other
+  types required in preparation of factory inputs.
 
   To link manufacturers through a Broker, call the `register` method:
 
   ```python
+  import afb
+
   mfr_a = Manufacturer(A)
   mfr_b = Manufacturer(B)
 
-  afb = Broker()
+  broker = Broker()
 
-  afb.register(mfr_a)
-  afb.register(mfr_b)
+  broker.register(mfr_a)
+  broker.register(mfr_b)
   # Or one can simply call the `register_all` method to register an iterable
   # of `Manufacturer`s.
-  # afb.register_all([mfr_a, mfr_b])
+  # broker.register_all([mfr_a, mfr_b])
+  ```
+
+  Starting from `1.4.0`, a `Manufacturer` can be created and registered directly
+  through `Broker.get_or_create(cls)`:
+
+  ```python
+  broker = Broker()
+  mfr_a = broker.get_or_create(A)
+  mfr_b = broker.get_or_create(B)
   ```
   """
 
   def __init__(self):
     self._lock = RLock()
-
-    # Initialize broker
-    self._manufacturers = {}
-    # self._initialize()
-
-  # def _initialize(self):
-  #   # Register manufacturers of the primitives
-  #   self.register_all(create_primitive_mfrs())
+    self._mfrs = {}
 
   @property
   def classes(self):
-    return list(self._manufacturers.keys())
+    return list(self._mfrs.keys())
 
   @deprecated(version="1.4.0", reason="Use `get` or `get_or_create` instead.")
   def get_manufacturer(self, cls):
     return self.get(cls)
 
   def get(self, cls):
-    return self._manufacturers.get(cls)
+    return self._mfrs.get(cls)
 
   def get_or_create(self, cls):
     """Get class manufacturer. Create and register if one does not exist."""
     if not isinstance(cls, type):
       # TODO: Add error message
       raise TypeError()
-    if cls not in self._manufacturers:
+    if cls not in self._mfrs:
       with self._lock:
-        if cls not in self._manufacturers:
+        if cls not in self._mfrs:
           if primitives.is_supported(cls):
             self.register(primitives.create_mfr(cls))
           else:
             self.register(Manufacturer(cls))
-    return self._manufacturers[cls]
+    return self._mfrs[cls]
 
   def add_factory(self,
                   cls,
                   key,
                   factory,
-                  sig,
-                  params=None,
+                  signature,
+                  defaults=None,
                   descriptions=None,
-                  force=False,
-                  create_mfr=True):
+                  override=False,
+                  sig=None,
+                  params=None,
+                  force=None,
+                  create_mfr=None):
     """Register factory to Manufacturer of given class.
 
     """
+    # TODO: Add deprecation warning
+    if sig is not None:
+      signature = sig
+
+    if force is not None:
+      override = force
+
+    if params is not None:
+      defaults = params
+
+    if create_mfr is not None:
+      pass
+
     self._add_factory(cls,
                       key,
                       factory,
-                      sig,
-                      params=params,
+                      signature,
+                      defaults=defaults,
                       descriptions=descriptions,
-                      force=force,
-                      create_mfr=create_mfr)
+                      override=override)
 
   def merge(self, root, broker):
     """Merge all `Manufacturer`s from a `Broker`.
@@ -180,40 +198,40 @@ class Broker(object):
 
   def _merge_mfr(self, root, mfr):
     mfr = fn_util.maybe_call(mfr, Manufacturer)
-    if mfr.cls not in self._manufacturers:
+    if mfr.cls not in self._mfrs:
       self.register(Manufacturer(mfr.cls))
 
-    _mfr = self._manufacturers[mfr.cls]
+    _mfr = self._mfrs[mfr.cls]
     _mfr.merge(root=root, mfr=mfr)
 
-  def register(self, mfr):
+  def register(self, mfr, override=False):
     """TODO: Add docs"""
-    self._register(mfr)
+    self._register(mfr, override=override)
 
-  def register_all(self, mfrs):
+  def register_all(self, mfrs, override=False):
     checked = []
     for mfr in mfrs:
       if not isinstance(mfr, Manufacturer):
         raise TypeError("Only Manufacturer is allowed for registration.")
       checked.append(mfr)
-    [self.register(mfr) for mfr in checked]
+    [self.register(mfr, override=override) for mfr in checked]
 
-  def _register(self, mfr):
+  def _register(self, mfr, override=False):
     if not isinstance(mfr, Manufacturer):
       raise TypeError("Only Manufacturer is allowed for registration.")
     cls = mfr.cls
     with self._lock:
-      if cls in self._manufacturers:
+      if cls in self._mfrs and not override:
         raise ValueError("The class `{}` is already registered.".format(cls))
-      mfr.set_broker(self)
-      self._manufacturers[cls] = mfr
+      mfr._bind = self  # pylint: disable=protected-access
+      self._mfrs[cls] = mfr
 
   def make(self, cls, spec=None):
     if isinstance(spec, cls):
       if cls is not dict or len(spec) > 1:
         return spec
 
-    mfr = self._manufacturers.get(cls, None)
+    mfr = self._mfrs.get(cls, None)
     if mfr is None:
       raise KeyError("Unregistered manufacturer for class: {}".format(cls))
 
@@ -226,7 +244,7 @@ class Broker(object):
                       "Target Type: {}\nGiven: {}".format(cls, spec))
 
     method, params = next(iter(spec.items()))
-    if cls is dict and not mfr.has_method(method):
+    if cls is dict and method not in mfr:
       return spec
     return mfr.make(method=method, params=params)
 
@@ -242,26 +260,23 @@ class Broker(object):
     return self.export_docs(export_dir)
 
   def export_docs(self, export_dir):
-    for mfr in self._manufacturers.values():
+    for mfr in self._mfrs.values():
       mfr.export_docs(export_dir)
-    for mfr in primitives.create_missing_mfrs(self._manufacturers):
+    for mfr in primitives.create_missing_mfrs(self._mfrs):
       mfr.export_docs(export_dir)
 
   def _add_factory(self,
                    cls,
                    key,
                    factory,
-                   sig,
-                   params=None,
+                   signature,
+                   defaults=None,
                    descriptions=None,
-                   force=False,
-                   create_mfr=True):
-    mfr = self.get_or_create(cls) if create_mfr else self.get(cls)
-    if mfr is None:
-      raise KeyError("Manufacturer for `%s` not found." % cls.__name__)
+                   override=False):
+    mfr = self.get_or_create(cls)
     mfr.register(key,
                  factory,
-                 sig,
-                 params=params,
+                 signature,
+                 defaults=defaults,
                  descriptions=descriptions,
-                 force=force)
+                 override=override)
