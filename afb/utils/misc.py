@@ -52,7 +52,7 @@ def cls_to_qualname_id(cls, sep="_"):
 def cls_fullname(cls):
   if not isinstance(cls, type):
     raise TypeError("`cls` must be a class. Given: {}".format(cls))
-
+  if cls.__module__ == "builtins": return cls.__name__
   return "%s.%s" % (cls.__module__, cls.__name__)
 
 
