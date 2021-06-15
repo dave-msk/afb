@@ -17,6 +17,14 @@ from __future__ import division
 from __future__ import print_function
 
 
+class KeyConflictError(Exception):
+  pass
+
+
+class RestrictedAccessError(Exception):
+  pass
+
+
 class StructMismatchError(Exception):
   pass
 
