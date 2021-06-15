@@ -20,22 +20,20 @@ import copy
 import math
 import os
 import shutil
-import sys
 import tempfile
 import threading
 import warnings
-
-import deprecated as dp
 
 from afb.core import factory as fct_lib
 from afb.core import builtins_
 from afb.core.specs import obj_
 from afb.core.specs import type_
-from afb.utils import decorators
+from afb.utils import decorators as dc
 from afb.utils import errors
 from afb.utils import fn_util
 from afb.utils import keys
 from afb.utils import misc
+from afb.utils import validate
 
 
 class Manufacturer(object):
@@ -146,6 +144,12 @@ class Manufacturer(object):
     ```
   """
 
+  _mark_target_class_in_exc = dc.With("_exc_proxy",
+                                      ctx_from_attr=True,
+                                      call=True,
+                                      attr_call_args={"prefix": "_exc_prefix"})
+  _lock = dc.With("_lock", ctx_from_attr=True)
+
   def __init__(self, cls):
     """Creates a manufacturer for a class.
 
@@ -163,14 +167,17 @@ class Manufacturer(object):
     self._builtin_fcts = {}
     self._user_fcts = {}
     self._install_builtins()
+    self._exc_proxy = errors.ExceptionProxy()
+    self._exc_prefix = "[{}] ".format(misc.cls_fullname(cls))
 
   @property
   def cls(self):
     return self._cls
 
-  @decorators.SetterProperty
+  @dc.restricted("Do not bind `Broker` directly. Use `Broker.register`")
+  @dc.SetterProperty
+  @_lock
   def _bind(self, broker):
-    # TODO: Add warning or raise error if not called internally
     self._broker = broker
 
   @property
@@ -178,12 +185,13 @@ class Manufacturer(object):
     return self._default
 
   @default.setter
+  @_mark_target_class_in_exc
+  @_lock
   def default(self, key):
-    with self._lock:
-      self._wrap_error(lambda: errors.validate_type(key, str, "key"))
-      if key is not None and self.get(key) is None:
-        self._raise_error(KeyError, "Factory not found: {}".format(key))
-      self._default = key
+    validate.validate_type(key, str, "key")
+    if key is not None and key not in self:
+      raise KeyError("Factory not found: {}".format(key))
+    self._default = key
 
   # TODO: Mark as deprecated.
   @property
@@ -209,6 +217,7 @@ class Manufacturer(object):
     return reg.get(key)
 
   # TODO: Mark `force` as deprecated. Use `override` instead.
+  @_mark_target_class_in_exc
   def merge(self,
             mfr,
             root=None,
@@ -258,8 +267,8 @@ class Manufacturer(object):
     if force is not None:
       # TODO: Add deprecation warning
       override = force
-    mfr = self._wrap_error(lambda: fn_util.maybe_call(mfr, Manufacturer),
-                           prefix="Invalid `mfr`: ")
+
+    mfr = fn_util.maybe_call(mfr, Manufacturer)
 
     self._validate_merge(mfr, root, override, ignore_collision, sep)
     self._merge(root,
@@ -269,6 +278,7 @@ class Manufacturer(object):
                 sep=sep)
 
   # TODO: Mark `force` as deprecated. Use `override` instead
+  @_mark_target_class_in_exc
   def merge_all(self,
                 mfr_dict,
                 override=False,
@@ -318,26 +328,26 @@ class Manufacturer(object):
 
   def _merge(self, root, mfr, override=False, ignore_collision=True, sep="/"):
     for key in mfr.keys():
-      key = _merged_name(root, key, sep=sep)
       fct = mfr.get(key)
+      key = _merged_name(root, key, sep=sep)
       try:
         self._register(key=key,
                        factory=fct,
                        signature=None,
                        override=override)
-      except ValueError as e:
-        if (ignore_collision and
-            "The method `{}` is already registered.".format(key) in str(e)):
-          continue
+      except errors.KeyConflictError:
+        if ignore_collision: continue
         raise
 
   # TODO: Mark deprecated.
+  @_lock
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
     self._broker = broker
 
   # TODO: Mark `params` and `force` as deprecated.
   #   Use `defaults` and `override` instead.
+  @_mark_target_class_in_exc
   def register(self,
                key,
                factory,
@@ -432,6 +442,7 @@ class Manufacturer(object):
                    override=override)
 
   # TODO: Mark `keyword_mode` as deprecated. Not used anymore
+  @_mark_target_class_in_exc
   def register_dict(self, registrants, keyword_mode=None):
     """Registers factories from dictionary.
 
@@ -522,12 +533,12 @@ class Manufacturer(object):
       # TODO: Add deprecation warning
       pass
 
-    if not isinstance(registrants, dict):
-      raise TypeError()
-
+    validate.validate_type(registrants, dict, "registrants")
     reg_dicts = [_prep_reg_args(k, r) for k, r in registrants.items()]
+
     [self.register(**kwargs) for kwargs in reg_dicts]
 
+  @_mark_target_class_in_exc
   def _register(self,
                 key,
                 factory,
@@ -547,36 +558,30 @@ class Manufacturer(object):
       # This block is for Manufacturer merges
       with self._lock:
         if key in self._user_fcts and not override:
-          self._raise_error(
-              ValueError, "The factory `{}` is already registered.".format(key))
+          raise errors.KeyConflictError("Factory key `{}` exists.".format(key))
         self._user_fcts[key] = factory
       return
 
     # Retrieve registry
     registry = self._builtin_fcts if _builtins else self._user_fcts
 
-    # Check types
-    self._wrap_error(lambda: errors.validate_type(key, str, "key"))
-    self._wrap_error(
-        lambda: errors.validate_is_callable(factory, "factory"), key=key)
+    # Validate arguments
+    # .1 Validate `key`
+    validate.validate_type(key, str, "key")
 
-    if not isinstance(signature, dict):
-      raise self._raise_error(
-          TypeError,
-          "Key: {}\n`signature` must be a dict mapping factory arguments to "
-          "their parameter specification, or (deprecated) type specification."
-          .format(key))
-
-    defaults = defaults or {}
-    self._wrap_error(
-        lambda: errors.validate_kwargs(defaults, "defaults"), key=key)
+    # .2 Validate `factory` and `signature`
+    with self._exc_proxy(prefix="[key: {}] ".format(key)):
+      validate.validate_is_callable(factory, "factory")
+      validate.validate_type(signature, dict, "signature")
+      defaults = defaults or {}
+      validate.validate_kwargs(defaults, "defaults")
 
     # Register factory.
     with self._lock:
       if key in registry:
         if not override:
-          self._raise_error(
-              ValueError, "The factory `{}` is already registered.".format(key))
+          raise errors.KeyConflictError(
+              "The factory `{}` is already registered.".format(key))
         # TODO: Add a warning
       if not isinstance(factory, fct_lib.Factory):
         factory = fct_lib.Factory(self._cls,
@@ -615,10 +620,12 @@ class Manufacturer(object):
     if method is not None:
       # TODO: Add deprecation warning
       key = method
+    else:
+      key = self.default if key is None else key
 
-    key = self.default if key is None else key
     if key is None:
-      raise ValueError()
+      raise ValueError("[{}] Factory key not specified."
+                       .format(misc.cls_fullname(self._cls)))
 
     if params is not None:
       # TODO: Add deprecation warning
@@ -628,9 +635,11 @@ class Manufacturer(object):
   def _make(self, key, inputs):
     fct = self.get(key)
     if fct is None:
-      self._raise_error(ValueError, "Unregistered key: {}".format(key))
+      raise KeyError("[{}] Factory not found: {}"
+                     .format(misc.cls_fullname(self._cls), key))
 
-    self._wrap_error(lambda: errors.validate_kwargs(inputs, "inputs"), key=key)
+    with self._exc_proxy(prefix="[key: {}]".format(key)):
+      validate.validate_kwargs(inputs, "inputs")
     conf = self._create_exec_conf(key, inputs)
 
     iter_fn = fn_util.IterDfsOp(_exec_conf_proc_fn)
@@ -667,8 +676,8 @@ class Manufacturer(object):
       if ts_or_cls is dict:
         return obj_or_spec.raw, misc.NONE
       # TODO: Invalid object spec
-      raise KeyError(
-          "No such factory for class {}: {}".format(ts_or_cls, obj_or_spec.key))
+      raise KeyError("No such factory for class {}: {}"
+                     .format(misc.cls_fullname(ts_or_cls), obj_or_spec.key))
 
     fuse_fn = fn_util.FuseFnCallConf.partial(fct.call_as_fuse_fn)
     inputs_iter = fct.parse_inputs(obj_or_spec.inputs)
@@ -732,46 +741,23 @@ class Manufacturer(object):
     return mfr
 
   def _validate_merge(self, mfr, key, override, ignore_collision, sep):
-    if key is not None and not isinstance(key, str):
-      raise self._raise_error(
-          TypeError,  "`key` must be a `str` or None. Given: {}".format(key))
+    validate.validate_type(key, str, "key")
 
-    if not isinstance(mfr, Manufacturer):
-      raise self._raise_error(TypeError,
-                              "`mfr` must be a `Manufacturer`. Given: {}"
-                              .format(type(mfr)))
     if not issubclass(mfr.cls, self.cls):
-      raise self._raise_error(TypeError,
-                              "The target class of `mfr` must be a subclass of "
-                              "{}, given: {}".format(self.cls, mfr.cls))
+      raise TypeError(
+          "The target of `mfr` must be a subclass of {}. Given: {}"
+          .format(misc.cls_fullname(self.cls), misc.cls_fullname(mfr.cls)))
 
     if override or ignore_collision:
       return
 
-    factories = mfr.factories
-    merged_names = set(_merged_name(key, n, sep=sep) for n in factories)
+    merged_names = set(_merged_name(key, n, sep=sep) for n in mfr.keys())
     collisions = merged_names.intersection(self._user_fcts)
     if collisions:
-      raise self._raise_error(KeyError,
-                              "Factory key conflicts occurred: {}. "
-                              "Please use another key for merge instead"
-                              .format(sorted(collisions)))
-
-  def _wrap_error(self, fn, prefix=None, suffix=None, key=None):
-    try:
-      return fn()
-    except:
-      e = sys.exc_info()
-      message = str(e[1])
-      if key: message = "Factory: {}\n{}".format(key, message)
-      if prefix: message = "%s%s" % (prefix, message)
-      if suffix: message = "%s%s" % (message, suffix)
-      self._raise_error(e[0], message)
-
-  def _raise_error(self, err_type, message):
-    message = ("Raised from \"Manufacturer\" of class {}:\n{}"
-               .format(self.cls, message))
-    raise err_type(message)
+      raise errors.KeyConflictError(
+          "Factory key conflicts detected, "
+          "please use another key for merge instead: {}"
+          .format(sorted(collisions)))
 
 
 _reg_params = fn_util.FnArgSpec.from_fn(Manufacturer.register).parameters[2:]
@@ -790,7 +776,8 @@ def _prep_reg_args(key, registrant):
   elif isinstance(registrant, (tuple, list)):
     registrant = {kw: arg for kw, arg in zip(_reg_params, registrant)}
   else:
-    raise TypeError()
+    raise TypeError("Invalid registrant. Expected a list, tuple or dict. "
+                    "Given: {} ".format(registrant))
 
   if "sig" in registrant:
     # TODO: Add compatibility warning
@@ -798,8 +785,8 @@ def _prep_reg_args(key, registrant):
 
   if any(p not in set(_reg_params) for p in registrant):
     invalids = sorted(set(registrant) - set(_reg_params))
-    raise KeyError("Invalid arguments - key: {}, args: {}"
-                   .format(key, invalids))
+    raise TypeError("Invalid arguments - key: {}, args: {}"
+                    .format(key, invalids))
   registrant["key"] = key
   return registrant
 

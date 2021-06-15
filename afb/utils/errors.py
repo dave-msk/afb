@@ -16,6 +16,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
+import threading
+
 
 class KeyConflictError(Exception):
   pass
@@ -31,3 +34,45 @@ class StructMismatchError(Exception):
 
 class SignatureError(Exception):
   pass
+
+
+class ArgumentError(Exception):
+  pass
+
+
+_ExceptionProxyContext = collections.namedtuple(
+    "_ExceptionProxyContext", ["prefix", "suffix", "depth"])
+
+
+class ExceptionProxy(object):
+  def __init__(self):
+    self._local = threading.local()
+    self._local.stack = []
+
+  def __enter__(self):
+    assert self._local.stack
+
+    ctx = self._local.stack[-1]
+    ctx.depth += 1
+    return ctx
+
+  def __exit__(self, exc_type, exc_val, exc_tb):
+    assert self._local.stack
+    ctx = self._local.stack[-1]
+    ctx.depth -= 1
+    if ctx.depth == 0:
+      self._local.stack.pop()
+      if exc_val:
+        exc_val = "%s%s%s" % (ctx.prefix, exc_val, ctx.suffix)
+
+    if exc_type:
+      raise exc_type(exc_val)
+
+  def __call__(self, prefix="", suffix=""):
+    if self._local.stack:
+      ctx = self._local.stack[-1]
+      if ctx.prefix == prefix and ctx.suffix == suffix:
+        return self
+    self._local.stack.append(
+        _ExceptionProxyContext(prefix=prefix, suffix=suffix, depth=0))
+    return self

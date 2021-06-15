@@ -16,6 +16,11 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import functools
+
+from afb.utils import errors
+from afb.utils import fn_util
+
 
 class LazyPropery(object):
   """
@@ -40,3 +45,48 @@ class SetterProperty(object):
 
   def __set__(self, obj, value):
     return self.function(obj, value)
+
+
+def restricted(msg=None):
+  def decorator(func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+      if not fn_util.is_called_internally(depth=2):
+        raise errors.RestrictedAccessError(msg or "")
+      return func(*args, **kwargs)
+    return wrapped
+  return decorator
+
+
+class With(object):
+  def __init__(self,
+               ctx,
+               ctx_from_attr=False,
+               call=False,
+               call_args=None,
+               attr_call_args=None,
+               as_=None):
+    self._ctx = ctx
+    self._call = call
+    self._as = as_
+    self._call_args = call_args or {}
+    self._attr_call_args = attr_call_args or {}
+    self._ctx_from_attr = ctx_from_attr
+
+  def __call__(self, func):
+    @functools.wraps(func)
+    def wrapped(*args, **kwargs):
+      ctx_mgr = (getattr(args[0], self._ctx)
+                 if self._ctx_from_attr
+                 else self._ctx)
+      if self._call:
+        ctx_args = dict(self._call_args)
+        ctx_args.update({k: getattr(args[0], v)
+                         for k, v in self._attr_call_args})
+        ctx_mgr = ctx_mgr(**ctx_args)
+      with ctx_mgr as ctx:
+        if self._as:
+          kwargs[self._as] = ctx
+        return func(*args, **kwargs)
+
+    return wrapped
