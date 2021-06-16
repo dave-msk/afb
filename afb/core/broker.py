@@ -222,8 +222,10 @@ class Broker(object):
       raise TypeError("Only Manufacturer is allowed for registration.")
     cls = mfr.cls
     with self._lock:
-      if cls in self._mfrs and not override:
-        raise ValueError("The class `{}` is already registered.".format(cls))
+      if cls in self._mfrs:
+        if not override:
+          raise ValueError("The class `{}` is already registered.".format(cls))
+        self._mfrs.pop(cls)._bind = None
       mfr._bind = self  # pylint: disable=protected-access
       self._mfrs[cls] = mfr
 
