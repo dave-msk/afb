@@ -16,7 +16,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import collections
 import threading
 
 
@@ -40,8 +39,11 @@ class ArgumentError(Exception):
   pass
 
 
-_ExceptionProxyContext = collections.namedtuple(
-    "_ExceptionProxyContext", ["prefix", "suffix", "depth"])
+class _ExceptionProxyContext(object):
+  def __init__(self, prefix="", suffix="", depth=0):
+    self.prefix = prefix
+    self.suffix = suffix
+    self.depth = depth
 
 
 class ExceptionProxy(object):
