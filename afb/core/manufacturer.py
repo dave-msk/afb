@@ -179,6 +179,8 @@ class Manufacturer(object):
   @dc.SetterProperty
   @_lock
   def _bind(self, broker):
+    if self._broker is not None:
+      self._broker._detach(self._cls)  # pylint: disable=protected-access
     self._broker = broker
 
   @property

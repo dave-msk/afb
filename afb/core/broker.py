@@ -23,6 +23,7 @@ from deprecated import deprecated
 
 from afb.core.manufacturer import Manufacturer
 from afb.core import primitives
+from afb.utils import decorators as dc
 from afb.utils import fn_util
 
 
@@ -225,6 +226,13 @@ class Broker(object):
         raise ValueError("The class `{}` is already registered.".format(cls))
       mfr._bind = self  # pylint: disable=protected-access
       self._mfrs[cls] = mfr
+
+  @dc.restricted
+  def _detach(self, cls):
+    if cls in self._mfrs:
+      with self._lock:
+        if cls in self._mfrs:
+          self._mfrs.pop(cls)
 
   def make(self, cls, spec=None):
     if isinstance(spec, cls):
