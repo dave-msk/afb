@@ -695,7 +695,12 @@ class Manufacturer(object):
     for k in static_keys:
       yield k, self._builtin_fcts[k]
 
-  def export_docs(self, output_dir, replace=False):
+  def export_docs(self, output_dir, overwrite=False):
+    target = os.path.join(output_dir, misc.cls_fullname(self._cls))
+    if not overwrite and os.path.exists(target):
+      raise FileExistsError("\"{}\". Pass `overwrite=True` to overwrite."
+                            .format(target))
+
     num_fcts = len(self._builtin_fcts) + len(self._user_fcts)
     digits = math.ceil(math.log10(num_fcts))
     fct_file_fmt = os.path.join(".", "{:0%sd}.md" % digits)
@@ -732,8 +737,7 @@ class Manufacturer(object):
         [fout.write("- %s\n" % item) for item in static_fct_items]
 
       # 3. Copy to output directory
-      target = os.path.join(output_dir, misc.cls_fullname(self._cls))
-      if replace and os.path.exists(target):
+      if os.path.exists(target):
         shutil.rmtree(target) if os.path.isdir(target) else os.remove(target)
       shutil.copytree(tmp_dir, target)
 
