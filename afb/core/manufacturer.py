@@ -164,11 +164,12 @@ class Manufacturer(object):
     self._broker = None
     self._default = None
 
+    self._exc_proxy = errors.ExceptionProxy()
+    self._exc_prefix = "[{}] ".format(misc.cls_fullname(cls))
+
     self._builtin_fcts = {}
     self._user_fcts = {}
     self._install_builtins()
-    self._exc_proxy = errors.ExceptionProxy()
-    self._exc_prefix = "[{}] ".format(misc.cls_fullname(cls))
 
   @property
   def cls(self):
