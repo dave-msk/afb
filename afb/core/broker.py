@@ -19,12 +19,14 @@ from __future__ import print_function
 import warnings
 from threading import RLock
 
-from deprecated import deprecated
-
-from afb.core.manufacturer import Manufacturer
 from afb.core import primitives
+from afb.core.manufacturer import Manufacturer
+from afb.core.specs import obj_
 from afb.utils import decorators as dc
+from afb.utils import errors
 from afb.utils import fn_util
+from afb.utils import misc
+from afb.utils import validate
 
 
 class Broker(object):
@@ -69,29 +71,36 @@ class Broker(object):
 
   @property
   def classes(self):
-    return list(self._mfrs.keys())
+    return sorted(self._mfrs.keys(), key=lambda c: misc.cls_fullname(c))
 
-  @deprecated(version="1.4.0", reason="Use `get` or `get_or_create` instead.")
+  # TODO: Mark deprecated. Use `get` instead.
   def get_manufacturer(self, cls):
     return self.get(cls)
 
   def get(self, cls):
+    if not isinstance(cls, type):
+      raise TypeError("`cls` must be a type. Given: {}".format(type(cls)))
     return self._mfrs.get(cls)
 
   def get_or_create(self, cls):
     """Get class manufacturer. Create and register if one does not exist."""
-    if not isinstance(cls, type):
-      # TODO: Add error message
-      raise TypeError()
-    if cls not in self._mfrs:
+    mfr = self.get(cls)
+    if mfr is None:
       with self._lock:
         if cls not in self._mfrs:
           if primitives.is_supported(cls):
             self.register(primitives.create_mfr(cls))
           else:
             self.register(Manufacturer(cls))
-    return self._mfrs[cls]
+      mfr = self._mfrs[cls]
+    return mfr
 
+  # TODO: Mark `sig`, `params`, `force`, `create_mfr` as deprecated
+  #   `sig` -> `signature`
+  #   `params` -> `defaults`
+  #   `force` -> `override`
+  #   `create_mfr` not used anymore
+  # TODO: Breaking changes to API
   def add_factory(self,
                   cls,
                   key,
@@ -128,7 +137,9 @@ class Broker(object):
                       descriptions=descriptions,
                       override=override)
 
-  def merge(self, root, broker):
+  # TODO: Update docstring
+  # TODO: Breaking changes to API
+  def merge(self, broker, **kwargs):
     """Merge all `Manufacturer`s from a `Broker`.
 
     This method merges all the `Manufacturer`s in the given `Broker` to the
@@ -149,9 +160,11 @@ class Broker(object):
       TypeError:
         - `broker` is not a `Broker` nor a function which returns one.
     """
-    self._merge(root, broker)
+    self._merge(broker, **kwargs)
 
-  def merge_mfr(self, root, mfr):
+  # TODO: Update docstring
+  # TODO: Breaking changes to API
+  def merge_mfr(self, mfr, **kwargs):
     """Merge `Manufacturer` with the same output class.
 
     This method merges the factories in the given `Manufacturer` to the managed
@@ -164,10 +177,10 @@ class Broker(object):
     See docstring of `Manufacturer.merge` for more details.
 
     Args:
-      root: A string that serves as the root of the factories from
-        `mfr`. If None, the original method name will be used directly.
       mfr: A `Manufacturer`, or a zero-argument function that returns one,
         whose factories are to be merged.
+      root: A string that serves as the root of the factories from
+        `mfr`. If None, the original method name will be used directly.
 
     Raises:
       KeyError:
@@ -175,9 +188,10 @@ class Broker(object):
       TypeError:
         - `mfr` is not a `Manufacturer` nor a function which returns one.
     """
-    self._merge_mfr(root, mfr)
+    self._merge_mfr(mfr, **kwargs)
 
-  def merge_mfrs(self, mfrs_dict):
+  # TODO: Update docstring
+  def merge_mfrs(self, mfrs_dict, **kwargs):
     """Merge multiple manufacturers for each key.
 
     Args:
@@ -185,46 +199,42 @@ class Broker(object):
         `Manufacturer`s, or zero-argument functions where each returns one,
          to be merged. The key will be used across the iterable.
     """
-    for key, mfrs in mfrs_dict.items():
+    for root, mfrs in mfrs_dict.items():
       for mfr in mfrs:
-        self.merge_mfr(key, mfr)
+        self.merge_mfr(mfr, root=root, **kwargs)
 
-  def _merge(self, root, broker):
+  def _merge(self, broker, **kwargs):
     broker = fn_util.maybe_call(broker, Broker)
-    root = fn_util.maybe_call(root, str)
     classes = broker.classes
     for cls in classes:
       mfr = broker.get(cls)
-      self.merge_mfr(root, mfr)
+      self.merge_mfr(mfr, **kwargs)
 
-  def _merge_mfr(self, root, mfr):
+  def _merge_mfr(self, mfr, **kwargs):
     mfr = fn_util.maybe_call(mfr, Manufacturer)
-    if mfr.cls not in self._mfrs:
-      self.register(Manufacturer(mfr.cls))
-
-    _mfr = self._mfrs[mfr.cls]
-    _mfr.merge(root=root, mfr=mfr)
+    _mfr = self.get_or_create(mfr.cls)
+    _mfr.merge(mfr, **kwargs)
 
   def register(self, mfr, override=False):
     """TODO: Add docs"""
     self._register(mfr, override=override)
 
-  def register_all(self, mfrs, override=False):
+  def register_all(self, mfrs, **kwargs):
     checked = []
     for mfr in mfrs:
-      if not isinstance(mfr, Manufacturer):
-        raise TypeError("Only Manufacturer is allowed for registration.")
+      mfr = fn_util.maybe_call(mfr, Manufacturer)
       checked.append(mfr)
-    [self.register(mfr, override=override) for mfr in checked]
+    [self.register(mfr, **kwargs) for mfr in checked]
 
   def _register(self, mfr, override=False):
-    if not isinstance(mfr, Manufacturer):
-      raise TypeError("Only Manufacturer is allowed for registration.")
+    validate.validate_type(mfr, Manufacturer, "mfr")
     cls = mfr.cls
     with self._lock:
       if cls in self._mfrs:
         if not override:
-          raise ValueError("The class `{}` is already registered.".format(cls))
+          raise errors.KeyConflictError(
+              "Manufacturer with target class `{}` exists."
+              .format(misc.cls_fullname(cls)))
         self._mfrs.pop(cls)._bind = None
       mfr._bind = self  # pylint: disable=protected-access
       self._mfrs[cls] = mfr
@@ -236,30 +246,20 @@ class Broker(object):
         if cls in self._mfrs:
           self._mfrs.pop(cls)
 
-  def make(self, cls, spec=None):
-    if isinstance(spec, cls):
-      if cls is not dict or len(spec) > 1:
-        return spec
+  # TODO: Mark `spec` as deprecated. Specify `key` and `inputs` directly
+  def make(self, cls, spec=None, key=None, inputs=None):
+    mfr = self.get_or_create(cls)
 
-    mfr = self._mfrs.get(cls, None)
-    if mfr is None:
-      raise KeyError("Unregistered manufacturer for class: {}".format(cls))
+    if spec is not None:
+      # TODO: Add deprecation warning
+      pass
+    else:
+      spec = {"key": key, "inputs": inputs}
+    obj_spec = obj_.ObjectSpec.parse(spec)
 
-    spec = spec or {None: None}
-    if not isinstance(spec, dict) or len(spec) != 1:
-      raise TypeError("`spec` must be either:"
-                      "1. An instance of the target type.\n"
-                      "2. An object specification (singleton `dict` mapping a "
-                      "factory to its arguments for instantiation).\n"
-                      "Target Type: {}\nGiven: {}".format(cls, spec))
+    return mfr.make(key=obj_spec.key, inputs=obj_spec.inputs)
 
-    method, params = next(iter(spec.items()))
-    if cls is dict and method not in mfr:
-      return spec
-    return mfr.make(method=method, params=params)
-
-  @deprecated(version="1.5.0",
-              reason="")
+  # TODO: Mark this method deprecated. Use `export_docs` instead.
   def export_markdown(self,
                       export_dir,
                       cls_dir_fn=None,
@@ -269,11 +269,11 @@ class Broker(object):
       warnings.warn("")
     return self.export_docs(export_dir)
 
-  def export_docs(self, export_dir):
+  def export_docs(self, export_dir, **kwargs):
     for mfr in self._mfrs.values():
-      mfr.export_docs(export_dir)
+      mfr.export_docs(export_dir, **kwargs)
     for mfr in primitives.create_missing_mfrs(self._mfrs):
-      mfr.export_docs(export_dir)
+      mfr.export_docs(export_dir, **kwargs)
 
   def _add_factory(self,
                    cls,
