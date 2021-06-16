@@ -82,7 +82,7 @@ class With(object):
       if self._call:
         ctx_args = dict(self._call_args)
         ctx_args.update({k: getattr(args[0], v)
-                         for k, v in self._attr_call_args})
+                         for k, v in self._attr_call_args.items()})
         ctx_mgr = ctx_mgr(**ctx_args)
       with ctx_mgr as ctx:
         if self._as:
