@@ -79,7 +79,7 @@ class SignatureMixin(object):
       raise
 
     for k, v in sig.items():
-      sig[k] = param.ParameterSpec.from_raw(v)
+      sig[k] = param.ParameterSpec.parse(v)
 
     return sig
 

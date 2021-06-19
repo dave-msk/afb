@@ -4,27 +4,19 @@ from __future__ import print_function
 
 import warnings
 
-import deprecated as dp
-
 from afb.core.specs import type_
 from afb.utils import errors
+from afb.utils import validate
 
 
 class ParameterSpec(object):
-  def __init__(self, type, description="", required=True, forced=None):
-    self._type_spec = type_.TypeSpec.create(type)
+  def __init__(self, type_spec, description="", required=True):
+    self._type_spec = type_spec
     self._description = description
+    self._required = required
 
-    if forced is not None:
-      warnings.warn(
-          "The parameter `forced` is deprecated. Use `required` instead.")
-      self._required = bool(forced)
-    else:
-      self._required = required
-
+  # TODO: Add deprecation warning. Use property `required` instead.
   @property
-  @dp.deprecated(version="1.5.0",
-                 reason="Use property `required` instead.")
   def forced(self):
     return self.required
 
@@ -40,33 +32,40 @@ class ParameterSpec(object):
   def description(self):
     return self._description
 
+  # TODO: Add deprecation warning. Use `ParameterSpec.parse` instead.
   @classmethod
   def from_raw(cls, raw):
-    if isinstance(raw, cls):
-      return raw
+    return cls.parse(raw)
 
-    if not _is_param_format(raw):
-      # TODO: Add deprecation warning for old format
-      raw = {"type": raw}
-    _validate_raw_spec(raw)
-    return cls(**raw)
+  @classmethod
+  def parse(cls, spec):
+    if isinstance(spec, cls):
+      return spec
+
+    if not _is_param_format(spec):
+      # TODO: Add deprecation waring for old format
+      spec = {"type": spec}
+    _validate_param_spec(spec)
+    spec["type_spec"] = type_.TypeSpec.parse(spec.pop("type"))
+    if "forced" in spec:
+      # TODO: Mark `forced` as deprecated. Use `required` instead
+      spec["required"] = spec.pop("forced")
+    return cls(**spec)
 
 
-def _validate_raw_spec(raw_spec):
-  if "type" not in raw_spec:
-    raise errors.SignatureError(
-        "Missing type specification `type`. Given: {}".format(raw_spec))
+def _validate_param_spec(spec):
+  assert isinstance(spec, dict)
 
-  if not isinstance(raw_spec.get("description", ""), str):
-    raise errors.SignatureError(
-        "`description` must be a string. Given: {}".format(raw_spec))
-  if not isinstance(raw_spec.get("required", True), bool):
-    raise errors.SignatureError(
-        "`required` must be a bool. Given: {}".format(raw_spec))
+  if "description" in spec:
+    validate.validate_type(spec["description"], str, "description")
+  if "required" in spec:
+    validate.validate_type(spec["required"], bool, "required")
+  if "forced" in spec:
+    validate.validate_type(spec["forced"], bool, "forced")
 
 
 def _is_param_format(spec):
   if isinstance(spec, dict):
-    unknown_keys = set(spec) - {"type", "description", "required"}
+    unknown_keys = set(spec) - {"type", "description", "required", "forced"}
     return "type" in spec and not unknown_keys
   return False

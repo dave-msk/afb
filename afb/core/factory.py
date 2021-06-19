@@ -7,7 +7,7 @@ import copy
 import inspect
 import io
 
-from afb.core import specs
+from afb.core.specs import param
 from afb.utils import errors
 from afb.utils import fn_util
 
@@ -123,7 +123,7 @@ def _format_signature(fn, signature):
   fn_arg_spec = fn_util.FnArgSpec.from_fn(fn)
   for k in fn_arg_spec.required:
     if k in signature:
-      rqd_sig[k] = specs.ParameterSpec.from_raw(signature.pop(k))
+      rqd_sig[k] = param.ParameterSpec.parse(signature.pop(k))
     else:
       missing.append(k)
 
@@ -133,14 +133,14 @@ def _format_signature(fn, signature):
 
   for k in fn_arg_spec.optional:
     if k in signature:
-      opt_sig[k] = specs.ParameterSpec.from_raw(signature.pop(k))
+      opt_sig[k] = param.ParameterSpec.parse(signature.pop(k))
 
   if signature:
     if not fn_arg_spec.kwargs:
       raise errors.SignatureError("No such parameters: {}"
                                   .format(list(signature)))
     for k, p in signature.items():
-      pspec = specs.ParameterSpec.from_raw(p)
+      pspec = param.ParameterSpec.parse(p)
       [opt_sig, rqd_sig][pspec.required][k] = pspec
 
   rqds = set(rqd_sig)
