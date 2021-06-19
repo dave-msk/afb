@@ -17,7 +17,6 @@ from __future__ import division
 from __future__ import print_function
 
 import collections
-import typing
 
 from afb.core.specs import param
 
@@ -63,16 +62,22 @@ class SignatureMixin(object):
     if not isinstance(sig, collections.OrderedDict):
       sig = collections.OrderedDict(sig)
 
-    if includes:
-      if not isinstance(includes, typing.Iterable):
-        raise TypeError("`includes` must be iterable. Given: {}"
-                        .format(includes))
-      excludes = [k for k in sig if k not in set(includes)]
-    if excludes:
-      if not isinstance(excludes, typing.Iterable):
-        raise TypeError("`excludes` must be iterable. Given: {}"
-                        .format(excludes))
-      [sig.pop(k, None) for k in excludes]
+    key = None
+    given = None
+    try:
+      if includes:
+        key = "includes"
+        given = includes
+        excludes = [k for k in sig if k not in set(includes)]
+      if excludes:
+        key = "excludes"
+        given = excludes
+        [sig.pop(k, None) for k in excludes]
+    except TypeError as e:
+      if "object is not iterable" in str(e):
+        raise TypeError("`{}` must be iterable. Given: {}".format(key, given))
+      raise
+
     for k, v in sig.items():
       sig[k] = param.ParameterSpec.from_raw(v)
 
