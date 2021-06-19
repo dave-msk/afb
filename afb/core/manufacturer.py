@@ -23,6 +23,7 @@ import shutil
 import tempfile
 import threading
 import warnings
+import weakref
 
 from afb.core import factory as fct_lib
 from afb.core import builtins_
@@ -55,8 +56,8 @@ class Manufacturer(object):
 
   The arguments of the target factory may require objects other than the
   primitive types (such as `int`, `float`, `bool` and `str`). In such case,
-  an **Input Specification** is required. See the detailed explanation described
-  in the `TypeSpec`. For example, we have two classes below:
+  a **Manifest** is required. See the detailed explanation described in the
+  `TypeSpec`. For example, we have two classes below:
 
   ```python
   class A(object):
@@ -176,7 +177,6 @@ class Manufacturer(object):
     return self._cls
 
   @dc.restricted("Do not bind `Broker` directly. Use `Broker.register`")
-  @dc.SetterProperty
   @_lock
   def _bind(self, broker):
     _broker = self._broker
@@ -430,13 +430,13 @@ class Manufacturer(object):
 
     Raises:
       ValueError:
-        1. `factory` is not a callable.
         2. The parameter keywords of `factory` does not match the keys of `sig`.
         3. `key` is already registered when `force` is `False`.
         4. `descriptions` is not a `dict` with short description specified.
         5. `descriptions` contains any keys not from `("short", "long")`.
       TypeError:
         1. `key` is not a string.
+        2. `factory` is not a callable.
         2. `signature` is not a dict with string keys.
         3. `defaults` is not a dict with string keys.
         4. `descriptions` contains non-string values.
@@ -657,32 +657,32 @@ class Manufacturer(object):
     # Hold a strong reference of `Broker` if one is bound to avoid
     # unexpected garbage collection during factory tree traversal.
     _broker = self._broker
-    conf = self._create_exec_conf(key, inputs)
+    root = self._create_exec_tree(key, inputs)
 
-    iter_fn = fn_util.IterDfsOp(_exec_conf_proc_fn)
-    return iter_fn(conf)
+    iter_fn = fn_util.PostorderDFS(_run_exec_tree_proc)
+    return iter_fn(root)
 
-  def _create_exec_conf(self, key, inputs):
-    ts = type_.TypeSpec.create(self._cls)
-    iter_fn = fn_util.IterDfsOp(self._create_exec_conf_proc_fn)
+  def _create_exec_tree(self, key, inputs):
+    ts = type_.TypeSpec.parse(self._cls)
+    iter_fn = fn_util.PostorderDFS(self._create_exec_tree_proc)
     return iter_fn((ts, {key: inputs}))
 
-  def _create_exec_conf_proc_fn(self, item):
+  def _create_exec_tree_proc(self, item):
     ts_or_cls, obj_or_spec = item
     if ts_or_cls is None:
-      return obj_or_spec, misc.NONE
+      return fn_util.ItemResult(obj_or_spec)
 
     if isinstance(ts_or_cls, type_.TypeSpec):
-      fuse_fn = fn_util.FuseFnCallConf.partial(ts_or_cls.fuse_inputs)
-      stack_item = (fuse_fn, ts_or_cls.parse_input_spec(obj_or_spec))
-      return misc.NONE, stack_item
+      return fn_util.NodeResult(
+          fn_util.FuseCallInfo.partial(ts_or_cls.pack),
+          ts_or_cls.parse_manifest(obj_or_spec))
 
     assert isinstance(ts_or_cls, type)
     if obj_or_spec is None:
-      return obj_or_spec, misc.NONE
+      return fn_util.ItemResult(obj_or_spec)
 
     if obj_.is_direct_object(obj_or_spec, ts_or_cls):
-      return obj_or_spec, misc.NONE
+      return fn_util.ItemResult(obj_or_spec)
 
     assert isinstance(obj_or_spec, obj_.ObjectSpec)
 
@@ -696,14 +696,14 @@ class Manufacturer(object):
 
     if fct is None:
       if ts_or_cls is dict:
-        return obj_or_spec.raw, misc.NONE
+        return fn_util.ItemResult(obj_or_spec.raw)
       # TODO: Invalid object spec
       raise KeyError("No such factory for class {}: {}"
                      .format(misc.cls_fullname(ts_or_cls), obj_or_spec.key))
 
-    fuse_fn = fn_util.FuseFnCallConf.partial(fct.call_as_fuse_fn)
-    inputs_iter = fct.parse_inputs(obj_or_spec.inputs)
-    return misc.NONE, (fuse_fn, inputs_iter)
+    return fn_util.NodeResult(
+        fn_util.FuseCallInfo.partial(fct.call_as_fuse_fn),
+        fct.parse_inputs(obj_or_spec.inputs))
 
   def _all_factory_items(self):
     dynamic_keys = sorted(self._user_fcts)
@@ -817,7 +817,7 @@ def _prep_reg_args(key, registrant):
   return registrant
 
 
-def _exec_conf_proc_fn(item):
-  if isinstance(item, fn_util.FuseFnCallConf):
-    return misc.NONE, (item, iter(item.args))
-  return item, misc.NONE
+def _run_exec_tree_proc(item):
+  if isinstance(item, fn_util.FuseCallInfo):
+    return fn_util.NodeResult(item, iter(item.args))
+  return fn_util.ItemResult(item)

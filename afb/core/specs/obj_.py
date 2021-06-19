@@ -10,9 +10,9 @@ class ObjectSpec(object):
   """Class instance specification.
 
   This class represents an object by a factory key and inputs to be used for
-  its creation. It is the input spec corresponding to the type specs for direct
+  its creation. It is the manifest corresponding to the type specs for direct
   classes. The inputs are expected to be a dictionary mapping factory parameters
-  to their expected inputs, either in directly value or input spec expected by
+  to their expected inputs, either in directly value or manifest expected by
   the parameter's type spec. The specified factory will be retrieved and called
   in `Manufacturer.make` with the all the inputs realized to their expected form
   according to the type specs.
@@ -26,7 +26,7 @@ class ObjectSpec(object):
     * Singleton dictionary with a factory key as key, and inputs value.
     * Dictionary with the following items:
       * `"key"`: Factory key
-      * `"inputs"`: Inputs (`dict` mapping factory parameters to input specs)
+      * `"inputs"`: Inputs (`dict` mapping factory parameters to manifests)
 
   As an illustration, the following two formats are equivalent:
 
@@ -52,7 +52,7 @@ class ObjectSpec(object):
   The above spec represents an object created by a factory registered with key
   `"some_factory"` called with `arg1=value1, arg2=value2` as arguments. This is
   a highly simplified description. In reality the values `value1` and `value2`
-  might be input specs as well, which would be transformed into direct objects
+  might be manifests as well, which would be transformed into direct objects
   before feeding into the factory.
 
   The object creation of `dict` is handled in a slightly different way.
@@ -96,9 +96,9 @@ class ObjectSpec(object):
     if not is_object_spec(spec):
       raise errors.InvalidFormatError(
           "`spec` is expected to be in one of the following format:\n"
-          "1. {{factory key (str): {{arg: input spec, ...}}}},\n"
+          "1. {{factory key (str): {{arg: manifest, ...}}}},\n"
           '2. {{"key": factory key (str), '
-          '"inputs": {{arg: input spec, ...}}}}\n'
+          '"inputs": {{arg: manifest, ...}}}}\n'
           "Given: {}".format(spec))
     if len(spec) == 2:
       return cls(spec, **spec)

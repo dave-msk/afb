@@ -17,11 +17,11 @@ class TypeSpec(object):
 
   The type specification (type spec) has the following grammar:
 
-  CTS := class
-  LTS := [TS]
-  DTS := {TS: TS}
-  TTS := (TS, ..., TS)
-  TS  := CTS | LTS | DTS | TTS
+  CTS (class type spec) := class
+  LTS (list type spec)  := [TS]
+  DTS (dict type spec)  := {TS: TS}
+  TTS (tuple type spec) := (TS, ..., TS)
+  TS  (type spec)       := CTS | LTS | DTS | TTS
 
   In detail, a type spec can be one of the following:
 
@@ -29,109 +29,109 @@ class TypeSpec(object):
     * LTS: A singleton list of a type spec (e.g.: `[MyClass]`, `[{str: int}]`,
            ...). This means the parameter is a homogeneous list of objects of
            type specified by the containing spec.
-    * DTS: A singleton dictionary with both the key and value being a type spec
+    * DTS: A singleton dict with both the key and value being a type spec
            (e.g.: `{MyClass1: [int]}`, `{str: MyClass2}`, ...). This means the
-           parameter is a homogeneous dictionary with keys and values conforming
+           parameter is a homogeneous dict with keys and values conforming
            to the key and value type specs respectively.
     * TTS: A tuple of type specs (e.g.: ([int], {str: MyClass}), ...).
            This means the parameter is a tuple of objects with each element
            conforms to the type spec at its corresponding position.
 
   Each kind of type spec corresponds to a particular form of input, called
-  Input Specification, which the argument must conform to. It has the following
+  Manifest, which the argument must conform to. It has the following
   grammar:
 
-  OIS := instance | {key: inputs} | {"key": key, "inputs": inputs}
-  LIS := [IS, ...]
-  DIS := {IS_k: IS_v, ...} | [{"key": IS_k, "value": IS_v}, ...]
-  TIS := (IS, ..., IS)
-  IS  := OIS | LIS | DIS | TIS
+  CM (class manifest) := object | {key: inputs} | {"key": key, "inputs": inputs}
+  LM (list manifest)  := [M, ...]
+  DM (dict manifest)  := {M_k: M_v, ...} | [{"key": M_k, "value": M_v}, ...]
+  TM (tuple manifest) := (M, ..., M)
+  M  (manifest)       := CM | LM | DM | TM
 
-  The following describes the input spec that corresponds to each kind of
+  The following describes the manifest that corresponds to each kind of
   type spec above:
 
-    * OIS: (CTS) Either of the following:
+    * CM: (CTS) Either of the following:
       * An instance of the target class
-      * A singleton dictionary with the factory key as key, and a dictionary
-        mapping each parameter to its input spec for the factory as value.
-      * A dictionary with two items:
+      * A singleton dict with the factory key as key, and a dict
+        mapping each parameter to its manifest for the factory as value.
+      * A dict with two items:
         * `"key"`: Factory key.
-        * `"inputs"`: Dictionary mapping each parameter to its input spec.
-    * LIS: (LTS) A list / tuple of arbitrary length of object specs of the
-           element type spec.
-    * DIS: (DTS) Either of the following:
-      * A dictionary of arbitrary length with keys and values being input specs
+        * `"inputs"`: dict mapping each parameter to its manifest.
+    * LM: (LTS) A list / tuple of arbitrary length of object specs of the
+        element type spec.
+    * DM: (DTS) Either of the following:
+      * A dict of arbitrary length with keys and values being manifests
         for the key and value type spec respectively.
-      * A list / tuple of dictionaries each with the following items:
-        * `"key"`: Input spec for the key.
-        * `"value"`: Input spec for the value.
-    * TIS: (TTS) A list / tuple of input specs each conforms to its
-           corresponding type spec. Each TS in the original TTS MUST have
-           an input spec.
+      * A list / tuple of dicts each with the following items:
+        * `"key"`: manifest for the key.
+        * `"value"`: manifest for the value.
+    * TM: (TTS) A list / tuple of manifests each conforms to its
+        corresponding type spec. Each TS in the original TTS MUST have
+        an manifest.
 
   This is the base class of the certain kind of type specs described above.
   DO NOT instantiate the classes directly, use `TypeSpec.create` instead.
   """
   def markdown_tmpl(self):
-    iter_fn = fn_util.IterDfsOp(lambda item: item.markdown_proc_fn())
+    iter_fn = fn_util.PostorderDFS(lambda item: item.markdown_proc_fn())
     return iter_fn(self)
 
-  def parse_input_spec(self, input_spec):
-    raise NotImplementedError()
+  def parse_manifest(self, manifest):
+    raise NotImplementedError("Must be implemented in descendants.")
 
   def markdown_proc_fn(self):
-    raise NotImplementedError()
+    raise NotImplementedError("Must be implemented in descendants.")
 
   @classmethod
-  def create(cls, raw_or_spec):
-    if isinstance(raw_or_spec, TypeSpec):
-      return raw_or_spec
+  def parse(cls, spec):
+    if isinstance(spec, TypeSpec):
+      return spec
 
-    if type(raw_or_spec) not in _TS_MAP:
+    if type(spec) not in _TS_MAP:
       raise TypeError()
 
-    iter_fn = fn_util.IterDfsOp(cls._create_proc_fn)
-    return iter_fn(raw_or_spec)
+    iter_fn = fn_util.PostorderDFS(cls._parse_proc_fn)
+    return iter_fn(spec)
 
   @classmethod
-  def _create_proc_fn(cls, item):
+  def _parse_proc_fn(cls, item):
     if isinstance(item, cls):
-      return item, misc.NONE
+      return fn_util.ItemResult(item)
     ts_cls = _TS_MAP[type(item)]
-    return misc.NONE, (ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
+    return fn_util.NodeResult(ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
 
   @classmethod
-  def fuse_inputs(cls, *inputs):
+  def pack(cls, *inputs):
     raise NotImplementedError()
 
   @classmethod
   def iter_raw(cls, raw_spec):
-    raise NotImplementedError()
+    raise NotImplementedError("Must be implemented in descendants.")
 
   @classmethod
   def fuse_subspecs(cls, *specs):
-    raise NotImplementedError()
+    raise NotImplementedError("Must be implemented in descendants.")
 
 
 class _ClassTypeSpec(TypeSpec):
   def __init__(self, cls):
     self._cls = cls
 
-  def parse_input_spec(self, input_spec):
-    if obj_.is_direct_object(input_spec, self._cls):
-      yield self._cls, input_spec
+  def parse_manifest(self, manifest):
+    if obj_.is_direct_object(manifest, self._cls):
+      yield self._cls, manifest
       return
 
-    obj_spec = obj_.ObjectSpec.parse(input_spec)
+    obj_spec = obj_.ObjectSpec.parse(manifest)
     yield self._cls, obj_spec
 
   def markdown_proc_fn(self):
     md_str = "[%s]({%s})" % (self._cls.__name__,
                              misc.cls_to_qualname_id(self._cls))
-    return (md_str, {self._cls}), misc.NONE
+    return fn_util.ItemResult((md_str, {self._cls}))
 
   @classmethod
-  def fuse_inputs(cls, *inputs):
+  def pack(cls, *inputs):
     return inputs[0]
 
   @classmethod
@@ -150,19 +150,19 @@ class _ListTypeSpec(TypeSpec):
   def __init__(self, entry_spec):
     self._ts = entry_spec
 
-  def parse_input_spec(self, input_spec):
+  def parse_manifest(self, manifest):
     # TODO: Add type validation for `args`
-    if not isinstance(input_spec, (tuple, list)):
+    if not isinstance(manifest, (tuple, list)):
       raise TypeError()
-    for spec in input_spec:
+    for spec in manifest:
       yield self._ts, spec
 
   def markdown_proc_fn(self):
-    stack_entry = (_MarkdownFuseFn("\\[%s\\]"), iter((self._ts,)))
-    return misc.NONE, stack_entry
+    return fn_util.NodeResult(_MarkdownFuseFn("\\[%s\\]"),
+                              iter((self._ts,)))
 
   @classmethod
-  def fuse_inputs(cls, *inputs):
+  def pack(cls, *inputs):
     return inputs
 
   @classmethod
@@ -180,12 +180,12 @@ class _DictTypeSpec(TypeSpec):
     self._ks = key_spec
     self._vs = value_spec
 
-  def parse_input_spec(self, input_spec):
+  def parse_manifest(self, manifest):
     # TODO: Add type validation for `input_spec`
-    if isinstance(input_spec, dict):
-      iterable = input_spec.items()
-    elif isinstance(input_spec, (tuple, list)):
-      iterable = input_spec
+    if isinstance(manifest, dict):
+      iterable = manifest.items()
+    elif isinstance(manifest, (tuple, list)):
+      iterable = manifest
     else:
       raise TypeError()
 
@@ -201,10 +201,10 @@ class _DictTypeSpec(TypeSpec):
 
   def markdown_proc_fn(self):
     fuse_fn = _MarkdownFuseFn("{%s: %s}")
-    return misc.NONE, (fuse_fn, iter((self._ks, self._vs)))
+    return fn_util.NodeResult(fuse_fn, iter((self._ks, self._vs)))
 
   @classmethod
-  def fuse_inputs(cls, *inputs):
+  def pack(cls, *inputs):
     assert not len(inputs) & 1
     return {inputs[i << 1]: inputs[(i << 1) + 1]
             for i in range(len(inputs) // 2, 2)}
@@ -226,21 +226,21 @@ class _TupleTypeSpec(TypeSpec):
     self._specs = entry_specs
     self._num_elements = len(entry_specs)
 
-  def parse_input_spec(self, input_spec):
+  def parse_manifest(self, manifest):
     # TODO: Add type validation for `args`
-    if (not isinstance(input_spec, (tuple, list)) or
-        len(input_spec) != self._num_elements):
+    if (not isinstance(manifest, (tuple, list)) or
+        len(manifest) != self._num_elements):
       raise TypeError()
-    for pair in zip(self._specs, input_spec):
+    for pair in zip(self._specs, manifest):
       yield pair
 
   def markdown_proc_fn(self):
     md_str = "(%s)" % ", ".join("%s" for _ in self._specs)
     fuse_fn = _MarkdownFuseFn(md_str)
-    return misc.NONE, (fuse_fn, iter(self._specs))
+    return fn_util.NodeResult(fuse_fn, iter(self._specs))
 
   @classmethod
-  def fuse_inputs(cls, *args):
+  def pack(cls, *args):
     return tuple(args)
 
   @classmethod
