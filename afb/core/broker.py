@@ -236,7 +236,7 @@ class Broker(object):
               "Manufacturer with target class `{}` exists."
               .format(misc.cls_fullname(cls)))
         self._mfrs.pop(cls)._bind = None
-      mfr._bind = self  # pylint: disable=protected-access
+      mfr._bind(self)  # pylint: disable=protected-access
       self._mfrs[cls] = mfr
 
   @dc.restricted
