@@ -27,10 +27,6 @@ class RestrictedAccessError(Exception):
   pass
 
 
-class StructMismatchError(Exception):
-  pass
-
-
 class SignatureError(Exception):
   pass
 
