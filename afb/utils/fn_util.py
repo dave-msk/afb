@@ -19,7 +19,8 @@ class IterDfsOp(object):
     self._proc_fn = proc_fn
 
   def __call__(self, seed):
-    stack = [(lambda *x: x[0], iter((seed,)), [])]
+    stack = collections.deque()
+    stack.append((lambda *x: x[0], iter((seed,)), []))
     result = None
 
     while stack:
