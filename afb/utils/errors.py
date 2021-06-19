@@ -43,6 +43,10 @@ class InvalidFormatError(Exception):
   pass
 
 
+class GraphError(Exception):
+  pass
+
+
 class _ExceptionProxyContext(object):
   def __init__(self, prefix="", suffix="", depth=0):
     self.prefix = prefix

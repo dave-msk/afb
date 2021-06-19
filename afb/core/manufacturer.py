@@ -161,7 +161,7 @@ class Manufacturer(object):
 
     self._cls = cls
     self._lock = threading.RLock()
-    self._broker = None
+    self._broker_ref = None
     self._default = None
 
     self._exc_proxy = errors.ExceptionProxy()
@@ -179,9 +179,19 @@ class Manufacturer(object):
   @dc.SetterProperty
   @_lock
   def _bind(self, broker):
-    if self._broker is not None:
-      self._broker._detach(self._cls)  # pylint: disable=protected-access
-    self._broker = broker
+    _broker = self._broker
+    if _broker:
+      _broker._detach(self._cls)  # pylint: disable=protected-access
+    self._broker_ref = weakref.ref(broker) if broker else None
+
+  @property
+  @_lock
+  def _broker(self):
+    if self._broker_ref:
+      _broker = self._broker_ref()
+      if _broker: return _broker
+      self._broker_ref = None
+    return None
 
   @property
   def default(self):
@@ -346,7 +356,7 @@ class Manufacturer(object):
   @_lock
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
-    self._broker = broker
+    self._bind = broker
 
   # TODO: Mark `params` and `force` as deprecated.
   #   Use `defaults` and `override` instead.
@@ -643,6 +653,10 @@ class Manufacturer(object):
 
     with self._exc_proxy(prefix="[key: {}]".format(key)):
       validate.validate_kwargs(inputs, "inputs")
+
+    # Hold a strong reference of `Broker` if one is bound to avoid
+    # unexpected garbage collection during factory tree traversal.
+    _broker = self._broker
     conf = self._create_exec_conf(key, inputs)
 
     iter_fn = fn_util.IterDfsOp(_exec_conf_proc_fn)
@@ -671,6 +685,11 @@ class Manufacturer(object):
       return obj_or_spec, misc.NONE
 
     assert isinstance(obj_or_spec, obj_.ObjectSpec)
+
+    _broker = self._broker
+    if _broker is None:
+      raise errors.GraphError("Broker not found. Target: {}"
+                              .format(misc.cls_fullname(self._cls)))
 
     mfr = self._broker.get_or_create(ts_or_cls)
     fct = mfr.get(obj_or_spec.key)
