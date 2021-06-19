@@ -16,13 +16,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.core import specs
+from afb.core.specs import param
 from afb.utils import misc
 
 
 def make_from_config(mfr):
   sig = {
-      "config": specs.ParameterSpec(
+      "config": param.ParameterSpec(
           str,
           description="Config file in YAML/JSON, containing a single "
                       'object specification for class "%s"' % mfr.cls.__name__,

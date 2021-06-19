@@ -16,14 +16,14 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from afb.core import specs
+from afb.core.specs import param
 from afb.utils import misc
 
 
 # TODO: Change to generic json/yaml load
 def get_load_config():
   sig = {
-      "config": specs.ParameterSpec(
+      "config": param.ParameterSpec(
           str,
           description="Path to configuration file containing a "
                       "representation corresponding to a single `dict`."),

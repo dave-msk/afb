@@ -19,7 +19,7 @@ from __future__ import print_function
 import collections
 import typing
 
-from afb.core import specs
+from afb.core.specs import param
 
 
 class SignatureMixin(object):
@@ -74,7 +74,7 @@ class SignatureMixin(object):
                         .format(excludes))
       [sig.pop(k, None) for k in excludes]
     for k, v in sig.items():
-      sig[k] = specs.ParameterSpec.from_raw(v)
+      sig[k] = param.ParameterSpec.from_raw(v)
 
     return sig
 
