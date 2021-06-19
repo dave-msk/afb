@@ -5,6 +5,7 @@ from __future__ import print_function
 from afb.core.specs import obj_
 from afb.utils import const
 from afb.utils import fn_util
+from afb.utils import errors
 from afb.utils import misc
 
 
@@ -73,13 +74,13 @@ class TypeSpec(object):
   DO NOT instantiate the classes directly, use `TypeSpec.create` instead.
   """
   def markdown_tmpl(self):
-    iter_fn = fn_util.PostorderDFS(lambda item: item.markdown_proc_fn())
+    iter_fn = fn_util.PostorderDFS(lambda item: item.markdown_proc())
     return iter_fn(self)
 
   def parse_manifest(self, manifest):
     raise NotImplementedError("Must be implemented in descendants.")
 
-  def markdown_proc_fn(self):
+  def markdown_proc(self):
     raise NotImplementedError("Must be implemented in descendants.")
 
   @classmethod
@@ -88,13 +89,14 @@ class TypeSpec(object):
       return spec
 
     if type(spec) not in _TS_MAP:
-      raise TypeError()
+      raise TypeError("`spec` has to be a type, list, dict or tuple. Given: {}"
+                      .format(misc.cls_fullname(type(spec))))
 
-    iter_fn = fn_util.PostorderDFS(cls._parse_proc_fn)
+    iter_fn = fn_util.PostorderDFS(cls._parse_proc)
     return iter_fn(spec)
 
   @classmethod
-  def _parse_proc_fn(cls, item):
+  def _parse_proc(cls, item):
     if isinstance(item, cls):
       return fn_util.ItemResult(item)
     ts_cls = _TS_MAP[type(item)]
@@ -102,7 +104,7 @@ class TypeSpec(object):
 
   @classmethod
   def pack(cls, *inputs):
-    raise NotImplementedError()
+    raise NotImplementedError("Must be implemented in descendants.")
 
   @classmethod
   def iter_raw(cls, raw_spec):
@@ -125,7 +127,7 @@ class _ClassTypeSpec(TypeSpec):
     obj_spec = obj_.ObjectSpec.parse(manifest)
     yield self._cls, obj_spec
 
-  def markdown_proc_fn(self):
+  def markdown_proc(self):
     md_str = "[%s]({%s})" % (self._cls.__name__,
                              misc.cls_to_qualname_id(self._cls))
     return fn_util.ItemResult((md_str, {self._cls}))
@@ -151,13 +153,14 @@ class _ListTypeSpec(TypeSpec):
     self._ts = entry_spec
 
   def parse_manifest(self, manifest):
-    # TODO: Add type validation for `args`
     if not isinstance(manifest, (tuple, list)):
-      raise TypeError()
+      raise errors.InvalidFormatError(
+          "Expected manifest to be a `list` or `tuple` for ListTypeSpec. "
+          "Given: {}".format(manifest))
     for spec in manifest:
       yield self._ts, spec
 
-  def markdown_proc_fn(self):
+  def markdown_proc(self):
     return fn_util.NodeResult(_MarkdownFuseFn("\\[%s\\]"),
                               iter((self._ts,)))
 
@@ -181,13 +184,16 @@ class _DictTypeSpec(TypeSpec):
     self._vs = value_spec
 
   def parse_manifest(self, manifest):
-    # TODO: Add type validation for `input_spec`
     if isinstance(manifest, dict):
       iterable = manifest.items()
     elif isinstance(manifest, (tuple, list)):
       iterable = manifest
     else:
-      raise TypeError()
+      raise errors.InvalidFormatError(
+          "Expected manifest formats for DictTypeSpec:\n"
+          "1. {{M_k: M_v, ...}}\n"
+          "2. [{{\"key\": M_k, \"value\": M_v}}, ...]\n"
+          "Given: {}".format(manifest))
 
     for pair in iterable:
       if isinstance(pair, (tuple, list)) and len(pair) == 2:
@@ -195,11 +201,15 @@ class _DictTypeSpec(TypeSpec):
       elif isinstance(pair, dict) and set(pair) == const.KEY_VALUE:
         k, v = pair[const.KEY], pair[const.VALUE]
       else:
-        raise TypeError()
+        raise errors.InvalidFormatError(
+          "Expected manifest formats for DictTypeSpec:\n"
+          "1. {{M_k: M_v, ...}}\n"
+          "2. [{{\"key\": M_k, \"value\": M_v}}, ...]\n"
+          "Given: {}".format(manifest))
       yield self._ks, k
       yield self._vs, v
 
-  def markdown_proc_fn(self):
+  def markdown_proc(self):
     fuse_fn = _MarkdownFuseFn("{%s: %s}")
     return fn_util.NodeResult(fuse_fn, iter((self._ks, self._vs)))
 
@@ -227,14 +237,16 @@ class _TupleTypeSpec(TypeSpec):
     self._num_elements = len(entry_specs)
 
   def parse_manifest(self, manifest):
-    # TODO: Add type validation for `args`
     if (not isinstance(manifest, (tuple, list)) or
         len(manifest) != self._num_elements):
-      raise TypeError()
+      raise errors.InvalidFormatError(
+          "Expected manifest to be `list` or `tuple` with the same length as "
+          "the TupleTypeSpec. Given: {}".format(manifest))
+
     for pair in zip(self._specs, manifest):
       yield pair
 
-  def markdown_proc_fn(self):
+  def markdown_proc(self):
     md_str = "(%s)" % ", ".join("%s" for _ in self._specs)
     fuse_fn = _MarkdownFuseFn(md_str)
     return fn_util.NodeResult(fuse_fn, iter(self._specs))
