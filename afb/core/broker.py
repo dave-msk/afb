@@ -257,7 +257,7 @@ class Broker(object):
       spec = {"key": key, "inputs": inputs}
     obj_spec = obj_.ObjectSpec.parse(spec)
 
-    return mfr.make(key=obj_spec.key, inputs=obj_spec.inputs)
+    return mfr.make(**obj_spec.as_dict())
 
   # TODO: Mark this method deprecated. Use `export_docs` instead.
   def export_markdown(self,
