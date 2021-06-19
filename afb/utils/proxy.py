@@ -11,7 +11,7 @@ class ModuleProxy(object):
   def __init__(self, path):
     self._path = path
 
-  @decorators.LazyPropery
+  @decorators.LazyProperty
   def _mod(self):
     return importlib.import_module(self._path)
 

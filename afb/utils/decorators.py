@@ -22,7 +22,7 @@ from afb.utils import errors
 from afb.utils import fn_util
 
 
-class LazyPropery(object):
+class LazyProperty(object):
   """
   TODO: Add descriptions
   """
@@ -33,18 +33,6 @@ class LazyPropery(object):
   def __get__(self, obj, type=None):
     obj.__dict__[self.name] = self.function(obj)
     return obj.__dict__[self.name]
-
-
-class SetterProperty(object):
-  """
-  # TODO: Add descriptions. From https://stackoverflow.com/questions/17576009/python-class-property-use-setter-but-evade-getter
-  """
-  def __init__(self, function):
-    self.function = function
-    self.__doc__ = function.__doc__
-
-  def __set__(self, obj, value):
-    return self.function(obj, value)
 
 
 def restricted(msg=None):
