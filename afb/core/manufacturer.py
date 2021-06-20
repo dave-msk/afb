@@ -637,7 +637,7 @@ class Manufacturer(object):
       key = self.default if key is None else key
 
     if key is None:
-      raise ValueError("[{}] Factory key not specified."
+      raise ValueError("[{}] Factory key unspecified."
                        .format(misc.cls_fullname(self._cls)))
 
     if params is not None:
@@ -811,8 +811,8 @@ def _prep_reg_args(key, registrant):
 
   if any(p not in set(_reg_params) for p in registrant):
     invalids = sorted(set(registrant) - set(_reg_params))
-    raise TypeError("Invalid arguments - key: {}, args: {}"
-                    .format(key, invalids))
+    raise errors.ArgumentError("Invalid parameters - key: {}, args: {}"
+                               .format(key, invalids))
   registrant["key"] = key
   return registrant
 
