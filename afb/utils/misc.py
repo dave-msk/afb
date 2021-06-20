@@ -26,9 +26,9 @@ from afb.utils import proxy
 NONE = object()
 
 CONFIG_LOADER = {
-    'yaml': yaml.safe_load,
-    'yml': yaml.safe_load,
-    'json': json.load,
+    '.yaml': yaml.safe_load,
+    '.yml': yaml.safe_load,
+    '.json': json.load,
 }
 
 _mfr_lib = proxy.ModuleProxy("afb.core.manufacturer")
@@ -69,11 +69,10 @@ def load_config(config):
   The config file must contain a representation that will be deserialized into
   a single `dict`. Additional dictionaries (e.g. from YAML) are ignored.
   """
-  fmt = os.path.splitext(config)[1][1:].lower()
+  fmt = os.path.splitext(config)[-1].lower()
   with open(config, 'rb') as f:
     data = CONFIG_LOADER[fmt](f) or {None: None}
-  if not isinstance(data, dict) or len(data) != 1:
-    # TODO: Add error message
-    raise TypeError()
-
+  if not isinstance(data, dict):
+    raise TypeError("File content is not a `dict`. Path: {}, Content: {}"
+                    .format(config, data))
   return data
