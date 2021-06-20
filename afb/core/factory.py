@@ -180,7 +180,8 @@ class Signature(object):
 
     for k in fn_arg_spec.optional:
       if k in param_specs:
-        optional[k] = param.ParameterSpec.parse(param_specs.pop(k))
+        ps = param.ParameterSpec.parse(param_specs.pop(k))
+        [optional, required][ps.required][k] = ps
 
     if param_specs:
       if not fn_arg_spec.kwargs:
