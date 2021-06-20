@@ -116,7 +116,8 @@ class FuseCallInfo(object):
 
 def varargs_to_kwargs(*args):
   if len(args) & 1:
-    raise ValueError()
+    raise errors.ArgumentError("Number of inputs must be even. Given: {}"
+                               .format(len(args)))
   return {args[i << 1]: args[(i << 1) + 1] for i in range(len(args) // 2)}
 
 
