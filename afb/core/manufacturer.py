@@ -626,15 +626,15 @@ class Manufacturer(object):
       registry[key] = factory
 
   def make(self, key=None, inputs=None, method=None, params=None):
-    """Call factory to create object.
+    """Create object with specified factory.
 
     Args:
       key: String key specifying the factory to call. If `None`, the
         default factory is used.
-      inputs: Keyword argument dictionary for the factory. This dictionary
-        can be nested for any parameter that requires an object to be created
-        through another manufacturer. If `None`, the default parameters for
-        the factory is used.
+      inputs: Keyword argument `dict` for the factory. This `dict` is expected
+        to map each factory parameter to its manifest. See `TypeSpec` for
+        detailed explanation on manifests. If `None`, the default inputs for
+        for the factory is used.
       method: Deprecated. Use `key` instead. Overrides `key` if specified.
       params: Deprecated. Use `inputs` instead. Overrides `params` if specified.
 
@@ -765,11 +765,14 @@ class Manufacturer(object):
     `Manufacturer`s with no collision.
 
     Args:
-      output_dir: Directory for `Manufacturer` to place its output docs folder.
-      overwrite: Overwrites the output docs path if one exists.
+      output_dir: Directory under which the `Manufacturer` will outputs its
+        generated docs folder.
+      overwrite: If True, replaces `output_dir/<class>` with newly generated
+        directories if any of them exists. If False, an error is raised instead.
+
     Raises:
       FileExistsError:
-        - Path to output docs exists and `overwrite` is False.
+        - Path `output_dir/<class>` exists and `overwrite` is False.
     """
     target = os.path.join(output_dir, misc.cls_fullname(self._cls))
     if not overwrite and os.path.exists(target):
