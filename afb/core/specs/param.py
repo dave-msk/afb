@@ -24,7 +24,7 @@ from afb.utils import validate
 
 
 class ParameterSpec(object):
-  def __init__(self, type, description="", required=True, forced=None):
+  def __init__(self, type, description="", required=False, forced=None):
     self._type_spec = type_.TypeSpec.parse(type)
     self._description = description
     if forced is not None:
