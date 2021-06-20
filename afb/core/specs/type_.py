@@ -155,7 +155,7 @@ class _ListTypeSpec(TypeSpec):
   def parse_manifest(self, manifest):
     if not isinstance(manifest, (tuple, list)):
       raise errors.InvalidFormatError(
-          "Expected manifest to be a `list` or `tuple` for ListTypeSpec. "
+          "Manifest expected to be a `list` or `tuple` for ListTypeSpec. "
           "Given: {}".format(manifest))
     for spec in manifest:
       yield self._ts, spec
@@ -240,7 +240,7 @@ class _TupleTypeSpec(TypeSpec):
     if (not isinstance(manifest, (tuple, list)) or
         len(manifest) != self._num_elements):
       raise errors.InvalidFormatError(
-          "Expected manifest to be `list` or `tuple` with the same length as "
+          "Manifest expected to be `list` or `tuple` with the same length as "
           "the TupleTypeSpec. Given: {}".format(manifest))
 
     for pair in zip(self._specs, manifest):
