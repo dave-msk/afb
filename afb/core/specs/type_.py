@@ -103,8 +103,8 @@ class TypeSpec(object):
       return spec
 
     if type(spec) not in _TS_MAP:
-      raise TypeError("`spec` has to be a type, list, dict or tuple. Given: {}"
-                      .format(misc.cls_fullname(type(spec))))
+      raise TypeError("`spec` has to be a `type`, `list`, `dict` or `tuple`. "
+                      "Given: {}".format(misc.cls_fullname(type(spec))))
 
     iter_fn = fn_util.PostorderDFS(cls._parse_proc)
     return iter_fn(spec)
