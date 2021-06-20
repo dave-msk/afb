@@ -10,9 +10,12 @@ from afb.utils import validate
 
 
 class ParameterSpec(object):
-  def __init__(self, type_spec, description="", required=True):
-    self._type_spec = type_spec
+  def __init__(self, type, description="", required=True, forced=None):
+    self._type_spec = type_.TypeSpec.parse(type)
     self._description = description
+    if forced is not None:
+      # TODO: Add deprecation warning. Use `required` instead
+      required = forced
     self._required = required
 
   # TODO: Add deprecation warning. Use property `required` instead.
@@ -46,10 +49,6 @@ class ParameterSpec(object):
       # TODO: Add deprecation waring for old format
       spec = {"type": spec}
     _validate_param_spec(spec)
-    spec["type_spec"] = type_.TypeSpec.parse(spec.pop("type"))
-    if "forced" in spec:
-      # TODO: Mark `forced` as deprecated. Use `required` instead
-      spec["required"] = spec.pop("forced")
     return cls(**spec)
 
 

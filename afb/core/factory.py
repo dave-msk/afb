@@ -10,20 +10,27 @@ import io
 from afb.core.specs import param
 from afb.utils import errors
 from afb.utils import fn_util
+from afb.utils import misc
+from afb.utils import validate
 
 
 class Factory(object):
-  def __init__(self, cls, fn, signature, descriptions=None, defaults=None):
-    # TODO: Check if `factory` is callable
-    assert isinstance(cls, type)
-
+  def __init__(self,
+               cls,
+               fn,
+               signature,
+               descriptions=None,
+               defaults=None):
+    validate.validate_type(cls, type, "cls")
+    validate.validate_is_callable(fn, "fn")
     self._cls = cls
     self._fn = fn
-    self._rqd, self._sig = _format_signature(fn, signature)
-    self._all_args = set(self._sig)
-    desc = _normalized_factory_descriptions(descriptions or fn.__doc__)
-    self._short_desc = inspect.cleandoc(desc["short"])
-    self._long_desc = inspect.cleandoc(desc["long"])
+    if not isinstance(signature, Signature):
+      signature = Signature.create(fn, signature)
+    self._sig = signature
+    short, long = _normalize_descriptions(descriptions or fn.__doc__)
+    self._short_desc = short
+    self._long_desc = long
     self._defaults = defaults or {}
 
   def parse_inputs(self, inputs):
@@ -41,22 +48,22 @@ class Factory(object):
     # 2. Validate merged arguments
     # 2.1 Arguments validity check
     merged_names = set(merged)
-    inv_args = merged_names - self._all_args
+    inv_args = merged_names - self._sig.names
     if inv_args:
-      raise ValueError("Invalid arguments:\n"
-                       "Expected: {}\nGiven: {}\nInvalid: {}"
-                       .format(sorted(self._all_args),
-                               sorted(merged_names),
-                               sorted(inv_args)))
+      raise errors.ArgumentError("Invalid arguments:\n"
+                                 "Expected: {}\nGiven: {}\nInvalid: {}"
+                                 .format(sorted(self._sig.names),
+                                         sorted(merged_names),
+                                         sorted(inv_args)))
 
     # 2.2 Required arguments check
-    missing = self._rqd - merged_names
+    missing = self._sig.required - merged_names
     if missing:
-      raise TypeError("Missing required arguments.\n"
-                      "Required: {}\nGiven: {}\nMissing: {}"
-                      .format(sorted(self._rqd),
-                              sorted(merged_names),
-                              sorted(missing)))
+      raise errors.ArgumentError("Missing required arguments.\n"
+                                 "Required: {}\nGiven: {}\nMissing: {}"
+                                 .format(sorted(self._sig.required),
+                                         sorted(merged_names),
+                                         sorted(missing)))
 
     return merged
 
@@ -77,7 +84,7 @@ class Factory(object):
 
       all_classes = set()
 
-      for k, p in self._sig.items():
+      for k, p in self._sig:
         tmpl.write(arg_line % ("" if p.required else "(optional) ", k))
         md_str, classes = p.type.markdown_tmpl()
         tmpl.write(type_line % md_str)
@@ -109,50 +116,77 @@ class Factory(object):
   def __call__(self, **kwargs):
     instance = self._fn(**kwargs)
     if not isinstance(instance, self._cls):
-      raise TypeError()
+      raise TypeError("Expected output of type `{}`. Returned: {}, Type: `{}`"
+                      .format(misc.cls_fullname(self._cls),
+                              instance,
+                              misc.cls_fullname(type(instance))))
     return instance
 
 
-def _format_signature(fn, signature):
-  signature = collections.OrderedDict(signature)
+class Signature(object):
+  def __init__(self, ordered_param_specs, required):
+    self._ordered_param_specs = ordered_param_specs
+    self._required = required
 
-  rqd_sig = collections.OrderedDict()
-  opt_sig = collections.OrderedDict()
-  missing = []
+  @property
+  def required(self):
+    return set(self._required)
 
-  fn_arg_spec = fn_util.FnArgSpec.from_fn(fn)
-  for k in fn_arg_spec.required:
-    if k in signature:
-      rqd_sig[k] = param.ParameterSpec.parse(signature.pop(k))
-    else:
-      missing.append(k)
+  @property
+  def names(self):
+    return set(self._ordered_param_specs)
 
-  if missing:
-    raise errors.SignatureError("Missing required parameters: {}"
-                                .format(missing))
+  def __getitem__(self, item):
+    return self._ordered_param_specs[item]
 
-  for k in fn_arg_spec.optional:
-    if k in signature:
-      opt_sig[k] = param.ParameterSpec.parse(signature.pop(k))
+  def __contains__(self, item):
+    return item in self._ordered_param_specs
 
-  if signature:
-    if not fn_arg_spec.kwargs:
-      raise errors.SignatureError("No such parameters: {}"
-                                  .format(list(signature)))
-    for k, p in signature.items():
-      pspec = param.ParameterSpec.parse(p)
-      [opt_sig, rqd_sig][pspec.required][k] = pspec
+  def __iter__(self):
+    return iter(self._ordered_param_specs.items())
 
-  rqds = set(rqd_sig)
-  ordered_sig = collections.OrderedDict(rqd_sig)
-  ordered_sig.update(opt_sig)
-  return rqds, ordered_sig
+  @classmethod
+  def create(cls, fn, param_specs):
+    param_specs = collections.OrderedDict(param_specs)
+
+    required = collections.OrderedDict()
+    optional = collections.OrderedDict()
+    missing = []
+
+    fn_arg_spec = fn_util.FnArgSpec.from_fn(fn)
+    for k in fn_arg_spec.required:
+      if k in param_specs:
+        required[k] = param.ParameterSpec.parse(param_specs.pop(k))
+      else:
+        missing.append(k)
+
+    if missing:
+      raise errors.SignatureError("Missing required parameters: {}"
+                                  .format(missing))
+
+    for k in fn_arg_spec.optional:
+      if k in param_specs:
+        optional[k] = param.ParameterSpec.parse(param_specs.pop(k))
+
+    if param_specs:
+      if not fn_arg_spec.kwargs:
+        raise errors.SignatureError("No such parameters: {}"
+                                    .format(list(param_specs)))
+
+      for k, p in param_specs.items():
+        ps = param.ParameterSpec.parse(p)
+        [optional, required][ps.required][k] = ps
+
+    required_names = set(required)
+    ordered_param_specs = collections.OrderedDict(required)
+    ordered_param_specs.update(optional)
+    return cls(ordered_param_specs, required_names)
 
 
-def _normalized_factory_descriptions(desc):
+def _normalize_descriptions(desc):
   if isinstance(desc, str):
     lines = inspect.cleandoc(desc).split("\n")
-    return {"short": lines[0], "long": "\n".join(lines[1:]).strip()}
+    return lines[0], "\n".join(lines[1:]).strip()
 
   valid_keys = {"short", "long"}
   desc = desc or {"short": ""}
@@ -167,4 +201,4 @@ def _normalized_factory_descriptions(desc):
   long = desc.get("long", "")
   if not isinstance(short, str) or not isinstance(long, str):
     raise TypeError("The descriptions must be strings. Given: {}".format(desc))
-  return {"short": short, "long": long}
+  return short, long
