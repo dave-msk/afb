@@ -16,6 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import collections
 import copy
 import math
 import os
@@ -50,14 +51,14 @@ class Manufacturer(object):
   two arguments: `key` and `inputs`.
 
     * key: The string key of the target factory.
-    * inputs: A dictionary of keyword arguments for the factory. This dictionary
-              can be nested for any parameter that requires an object to be
-              created through another factory.
+    * inputs: A dictionary of arguments for the factory. This dictionary can be
+        nested for any parameter that requires an object to be created through
+        another factory.
 
   The arguments of the target factory may require objects other than the
   primitive types (such as `int`, `float`, `bool` and `str`). In such case,
-  a **Manifest** is required. See the detailed explanation described in the
-  `TypeSpec`. For example, we have two classes below:
+  a **Manifest** is required. See the detailed explanation in `TypeSpec`.
+  For example, we have two classes below:
 
   ```python
   class A(object):
@@ -104,10 +105,10 @@ class Manufacturer(object):
   broker.register(mfr_b)
   ```
 
-  > **Note:** From 1.4.0, the create and registration of `Manufacturer` can be
+  > **Note:** From 1.4.0, the creation and registration of `Manufacturer` can be
   done by `mfr = broker.get_or_create(cls)` directly.
 
-  There are two ways the B object can be created:
+  There are two ways a `B` object can be created:
 
   1. A direct call through `Manufacturer.make`:
 
@@ -124,25 +125,17 @@ class Manufacturer(object):
     b = mfr_b.make(key="create", inputs=inputs)
     ```
 
-  2. A call through `Broker.make`. In this way, we need to wrap the `key` and
-     `inputs` to a single dictionary. Note that the target class is also
+  2. A call through `Broker.make`. Note that the target class is also
      required for the broker to choose the right manufacturer.
 
     ```python
-    spec = {
-      # Factory key w.r.t manufacturer B
-      "create": {
-        "a": {
-          # Factory key w.r.t manufacturer A
-          "create": {
-            "u": 37.0,
-          },
-        },
-        "z": -41.0,
-      },
-    }
-    b = broker.make(cls=B, spec=spec)
+    b = broker.make(cls=B, key="create", inputs=inputs)
     ```
+
+  > **Important:** At most ONE `Manufacturer` of the same target class  can be
+  registered to the same `Broker` at a time. If the registered one is overridden
+  by another one via `Broker.register(mfr, override=True)`, the original one
+  will be detached.
   """
 
   _mark_target_class_in_exc = dc.With("_exc_proxy",
@@ -212,6 +205,7 @@ class Manufacturer(object):
     return copy.deepcopy(self._user_fcts)
 
   def keys(self):
+    """Returns keys of user-provided factories."""
     return self._user_fcts.keys()
 
   def __contains__(self, key):
@@ -219,13 +213,26 @@ class Manufacturer(object):
 
   # TODO: Mark deprecated. v=1.5.0, use `in` operator instead.
   def has_method(self, key):
-    return key in self._builtin_fcts or key in self._user_fcts
+    return key in self
 
   def _install_builtins(self):
     for k, make_fct in builtins_.FACTORY_MAKERS.items():
       self._register(keys.join_reserved(k), _builtins=True, **make_fct(self))
 
   def get(self, key):
+    """Retrieves the factory with key.
+
+    If `key` is under the reserved namespace (i.e. keys starting with `afb/`),
+    then the builtin factories are queried. Even if there is a user factory
+    registered with exactly the same key under this namespace, it will NOT be
+    returned.
+
+    Args:
+      key: Identifier of factory to be retrieved.
+
+    Returns:
+      The `Factory` referred by `key`, or None if not present.
+    """
     reg = self._builtin_fcts if keys.is_reserved(key) else self._user_fcts
     return reg.get(key)
 
@@ -238,7 +245,7 @@ class Manufacturer(object):
             ignore_collision=True,
             sep="/",
             force=None):
-    """Merge another manufacturer of the same type.
+    """Merge another manufacturer with compatible target.
 
     This method registers all the factories from the given `Manufacturer`.
     The resulting key of the merged factories will have the following form:
@@ -256,22 +263,24 @@ class Manufacturer(object):
     Args:
       mfr: `Manufacturer` or a zero-argument function that returns an
         instance of it.
-      root: A string that serves as the root of the factories from `mfr`.
-        If None, the original factory will be used directly.
+      root: A string that serves as the root of the factory keys from `mfr`.
+        If None, the original factory key will be used directly.
       override: If True, overwrites the original factory in case of key
         collision. Defaults to False. See `ignore_collision` for collision
         handling when `override` is False.
       ignore_collision: Will only take effect when `override` is False.
         If True, the factory key collision is ignored, i.e. the original factory
-        is preserved. Otherwise, an error would be raised. Defaults to False.
+        is preserved. Otherwise, an error would be raised when key collision
+        occurs. Defaults to False.
       sep: Separator between root and method name in the resulting factory key.
         Defaults to "/".
       force: Deprecated. Use `override` instead. If specified, this overrides
         `override` for backwards compatibility.
 
     Raises:
-      KeyError:
-        - Any of the resulting keys has been registered.
+      KeyConflictError:
+        - Any of the resulting keys has been registered when `override` and
+          `ignore_collision` are both False.
       TypeError:
         - `mfr` is not a `Manufacturer` nor a zero-argument function that
             returns an instance of it.
@@ -292,35 +301,34 @@ class Manufacturer(object):
 
   # TODO: Mark `force` as deprecated. Use `override` instead
   @_mark_target_class_in_exc
-  def merge_all(self,
-                mfr_dict,
-                override=False,
-                ignore_collision=False,
-                sep="/",
-                force=None):
+  def merge_all(self, mfr_dict, **kwargs):
     """Merges multiple manufacturers.
 
     Args:
-      mfr_dict: A dictionary mapping keys to `Manufacturer`s or zero-argument
-        functions where each returns a `Manufacturer`.
-      override: If True, overwrites the original factory registration in case of
-        key collision. Defaults to False. See `raise_on_collision` for
-        collision handling if not `override`.
-      ignore_collision: If True, the factory key collision is ignored when
-        `override` is False, and the original factory is preserved. Otherwise,
-        an error would be raised. Defaults to False.
-      sep: Separator between root and method name in the resulting factory key.
-        Defaults to "/". See `Manufacturer.merge` for details.
-      force: Deprecated. Use `override` instead. If specified, this overrides
-        `override` for backwards compatibility.
+      mfr_dict: A dictionary mapping each root to either of the following:
+        1. A `Manufacturer` instance with compatible target
+        2. A zero-argument function that returns (1) above
+        3. An iterable of either of (1, 2) above
+        4. A zero-argument function that returns either of (1, 3) above
+      **kwargs: Merge options:
+        * override: If True, overwrites the original factory registration in
+            case of key collision. Defaults to False. See `raise_on_collision`
+            for collision handling if not `override`.
+        * ignore_collision: If True, the factory key collision is ignored when
+            `override` is False, and the original factory is preserved.
+            Otherwise, an error would be raised. Defaults to False.
+        * sep: Separator between root and method name in the resulting factory
+            key. Defaults to "/". See `Manufacturer.merge` for details.
+        * force: Deprecated. Use `override` instead. If specified, this
+            overrides `override` for backwards compatibility.
 
     Raises:
-      KeyError:
-        - Any of the resulting keys has been registered.
+      KeyConflictError:
+        - Any of the resulting keys has been registered when `override` and
+          `ignore_collision` are both False
       TypeError:
-        - `mfr` is not a `Manufacturer` nor a zero-argument function that
-            returns one.
-        - Target of `mfr` is not a subclass of this target.
+        - Any values of `mfr_dict` is not one of the described ones above.
+        - Target of any `Manufacturer` that is not a subclass of this target.
     """
     if "forced" in kwargs:
       # TODO: Add deprecation warning
@@ -358,7 +366,7 @@ class Manufacturer(object):
   @_lock
   def set_broker(self, broker):
     """This is intended to be called by the broker in registration."""
-    self._bind = broker
+    self._bind(broker)
 
   # TODO: Mark `params` and `force` as deprecated.
   #   Use `defaults` and `override` instead.
@@ -375,17 +383,18 @@ class Manufacturer(object):
     """Register a factory.
 
     The `factory` is the callable to be used for object creation. The details of
-    each of the factory arguments needs to be specified in `signature`.
+    each of the factory parameters to be accepted in `Manufacturer.make` needs
+    to be specified in `signature`.
 
     ----------------------------------------------------------------------------
 
     Signature
     =========
 
-    The required signature is a `dict` mapping in the following format:
+    The required signature is a `dict` in the following format:
 
       {
-        <parameter>: `ParameterSpec` (or its raw format) / Type Specification,
+        <parameter>: `ParameterSpec` (or its raw format),
         ...
       }
 
@@ -394,7 +403,7 @@ class Manufacturer(object):
       {
         "type": Type Specification,
         "description": (optional) "Description of the argument",
-        "required": (optional) True / False (default)
+        "required": (optional) True / False (defaults to False)
       }
 
     The description will be rendered in the exported documentation.
@@ -405,14 +414,13 @@ class Manufacturer(object):
 
     A type specification is either of the following:
 
+      - Class or type;
       - Singleton `dict` where the key and value are both type specifications;
-      - Singleton `list`, where the content is a type specification;
-      - `tuple` of type specifications; or
-      - A class or type.
+      - Singleton `list`, where the content is a type specification; or
+      - `tuple` of type specifications;
 
     For example, the type specification of a dict mapping a string to
-    `TestClass` objects would be `{str: TestClass}`. See `TypeSpec` for
-    detailed description.
+    `TestClass` objects would be `{str: TestClass}`. See `TypeSpec` for details.
 
     ----------------------------------------------------------------------------
 
@@ -420,28 +428,34 @@ class Manufacturer(object):
       key: A string key that identifies the factory.
       factory: The factory to be registered.
       signature: The signature of the input parameters. It is a dict mapping
-        each argument of factory to its parameter specification.
-      defaults: (Optional) Default arguments for this factory.
+        each factory parameter to its parameter specification.
+      defaults: (Optional) `dict` of default arguments for this factory.
       descriptions: (Optional) Descriptions of this factory. If provided, it
-        must a string or a dict with short description by "short" (required),
-        and a long description by "long" (optional).
-      override: If `True`, overwrites the existing factory (if any). If `False`,
-        raises ValueError if `key` is already registered. Defaults to `False`.
+        must a string or a `dict` in the form:
+
+        ```python
+        {
+          "short": (required) short description,
+          "long": (optional) long description,
+        }
+        ```
+
+      override: If `True`, overrides the existing factory (if any). If `False`,
+        an error is raised in case of key collision. Defaults to `False`.
       params: Deprecated. Use `defaults` instead.
       force: Deprecated. Use `override` instead.
 
     Raises:
-      ValueError:
-        2. The parameter keywords of `factory` does not match the keys of `sig`.
-        3. `key` is already registered when `force` is `False`.
-        4. `descriptions` is not a `dict` with short description specified.
-        5. `descriptions` contains any keys not from `("short", "long")`.
+      KeyConflictError:
+        - Key collision occurs and `override` is False.
+      SignatureError:
+        - Invalid `signature` for `factory` (e.g. missing required parameters)
+      InvalidFormatError:
+        - `descriptions` is not in the right format.
       TypeError:
-        1. `key` is not a string.
-        2. `factory` is not a callable.
-        2. `signature` is not a dict with string keys.
-        3. `defaults` is not a dict with string keys.
-        4. `descriptions` contains non-string values.
+        - `key` is not a string.
+        - `factory` is not a callable.
+        - `signature` is not a dict with string keys.
     """
     if force is not None:
       # TODO: Add deprecation warning
@@ -543,6 +557,11 @@ class Manufacturer(object):
         `Manufacturer.register` call arguments (or zero-argument function that
         returns it).
       keyword_mode: Deprecated. Has no effect at all.
+    Raises:
+      ArgumentError:
+        - Invalid inputs for `Manufacturer.register` call.
+      TypeError:
+        - `registrants` is not a `dict`
     """
     if keyword_mode is not None:
       # TODO: Add deprecation warning
@@ -607,7 +626,7 @@ class Manufacturer(object):
       registry[key] = factory
 
   def make(self, key=None, inputs=None, method=None, params=None):
-    """Make object according to specification.
+    """Call factory to create object.
 
     Args:
       key: String key specifying the factory to call. If `None`, the
@@ -620,17 +639,25 @@ class Manufacturer(object):
       params: Deprecated. Use `inputs` instead. Overrides `params` if specified.
 
     Returns:
-      result: An object of intended class of this manufacturer.
+      An instance of the target class of this manufacturer.
 
     Raises:
+      ArgumentError:
+        - Invalid inputs for any involved factory call. (e.g. missing required
+          arguments, or invalid argument exists)
+      GraphError:
+        - This `Manufacturer` not attached to `Broker` when calling factories
+          where other classes are referenced.
+      InvalidFormatError:
+        - `inputs` contains arguments not conforming to the corresponding
+          type spec.
+      KeyError:
+        - Factory with `key` not found.
       ValueError:
-        1. `key` and `default` both not given.
-        2. `key` is not registered.
-        3. `inputs` contains invalid keyword arguments.
-
+        - `key` and `default` both unspecified.
       TypeError:
-        1. `inputs` is not a dictionary.
-        2. Specified factory does not return the intended class object.
+        - `inputs` is not a kwargs dictionary.
+        - Specified factory does not return an instance of the target class.
     """
     if method is not None:
       # TODO: Add deprecation warning
@@ -717,6 +744,33 @@ class Manufacturer(object):
       yield k, self._builtin_fcts[k]
 
   def export_docs(self, output_dir, overwrite=False):
+    """Export documentations of factories in markdown.
+
+    This method exports documentations of factories in markdown to the specified
+    directory. The exported docs include:
+
+      - `description.md`: This file contains information about the target class.
+        Typically, it consists of the following:
+          - Description of the target class
+          - A list of user factories (with links) with short descriptions
+          - A list of builtin factories (with links) with short descriptions
+      - `<index>.md`: Each file contains information about a factory.
+        It contains the following details:
+          - Description of the factory (short & long)
+          - A list of parameters accepted by the factory, each with its expected
+            type (with link) and description.
+
+    The above files will be placed in the `<output_dir>/<cls_fullname>/`
+    directory. The same `output_dir` can be passed to `export_docs` of different
+    `Manufacturer`s with no collision.
+
+    Args:
+      output_dir: Directory for `Manufacturer` to place its output docs folder.
+      overwrite: Overwrites the output docs path if one exists.
+    Raises:
+      FileExistsError:
+        - Path to output docs exists and `overwrite` is False.
+    """
     target = os.path.join(output_dir, misc.cls_fullname(self._cls))
     if not overwrite and os.path.exists(target):
       raise FileExistsError("\"{}\". Pass `overwrite=True` to overwrite."
