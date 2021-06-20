@@ -208,10 +208,10 @@ def _normalize_descriptions(desc):
   if (not isinstance(desc, dict) or
       "short" not in desc or
       (set(desc) - valid_keys)):
-    raise ValueError("The factory description must either be `None`, a `str`,"
-                     "or a `dict` including short description as \"short\" "
-                     "(required) and long description as \"long\" (optional)."
-                     "Given: {}".format(desc))
+    raise errors.InvalidFormatError(
+        "The factory description must either be `None`, a `str`, or a `dict` "
+        "including short description as \"short\" (required) and long "
+        "description as \"long\" (optional). Given: {}".format(desc))
   short = desc["short"]
   long = desc.get("long", "")
   if not isinstance(short, str) or not isinstance(long, str):
