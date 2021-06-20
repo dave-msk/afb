@@ -322,22 +322,24 @@ class Manufacturer(object):
             returns one.
         - Target of `mfr` is not a subclass of this target.
     """
-    if force is not None:
+    if "forced" in kwargs:
       # TODO: Add deprecation warning
-      override = force
+      kwargs["override"] = kwargs.pop("force")
 
-    mfr_dict_validated = {}
-    for root, mfr in mfr_dict.items():
-      mfr = fn_util.maybe_call(mfr, Manufacturer)
-      self._validate_merge(mfr, root, override, ignore_collision, sep)
-      mfr_dict_validated[root] = mfr
+    mfr_dict_validated = collections.defaultdict(list)
+    for root, mfrs in mfr_dict.items():
+      if callable(mfrs):
+        mfrs = mfrs()
+      if not hasattr(mfrs, "__iter__"):
+        mfrs = [mfrs]
 
-    for root, mfr in mfr_dict_validated.items():
-      self._merge(root,
-                  mfr,
-                  override=override,
-                  ignore_collision=ignore_collision,
-                  sep=sep)
+      for mfr in mfrs:
+        mfr = fn_util.maybe_call(mfr, Manufacturer)
+        self._validate_merge(mfr, root, **kwargs)
+        mfr_dict_validated[root].append(mfr)
+
+    for root, mfrs in mfr_dict_validated.items():
+      [self._merge(root, mfr, **kwargs) for mfr in mfrs]
 
   def _merge(self, root, mfr, override=False, ignore_collision=True, sep="/"):
     for key in mfr.keys():
