@@ -18,6 +18,7 @@ from __future__ import print_function
 
 import collections
 import copy
+import inspect
 import math
 import os
 import shutil
@@ -150,8 +151,8 @@ class Manufacturer(object):
     Args:
       cls: The target class.
     """
-    if not isinstance(cls, type):
-      raise TypeError("`cls` must be a type. Given: {}".format(type(cls)))
+    if inspect.isclass(cls):
+      raise TypeError("`cls` must be a class. Given: {}".format(type(cls)))
 
     self._cls = cls
     self._lock = threading.RLock()

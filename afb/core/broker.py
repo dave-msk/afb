@@ -16,6 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import inspect
 import warnings
 from threading import RLock
 
@@ -97,10 +98,10 @@ class Broker(object):
       The registered `Manufacturer` with `cls` as target, or None if not present
 
     Raises:
-      TypeError: `cls` is not a `type`.
+      TypeError: `cls` is not a class.
     """
-    if not isinstance(cls, type):
-      raise TypeError("`cls` must be a type. Given: {}".format(type(cls)))
+    if inspect.isclass(cls):
+      raise TypeError("`cls` must be a class. Given: {}".format(type(cls)))
     return self._mfrs.get(cls)
 
   def get_or_create(self, cls):
@@ -113,7 +114,7 @@ class Broker(object):
       The registered `Manufacturer` with `cls` as target.
 
     Raises:
-      TypeError: `cls` is not a `type`.
+      TypeError: `cls` is not a class.
     """
     mfr = self.get(cls)
     if mfr is None:

@@ -130,7 +130,7 @@ class Factory(object):
   def __call__(self, **kwargs):
     instance = self._fn(**kwargs)
     if not isinstance(instance, self._cls):
-      raise TypeError("Expected output of type `{}`. Returned: {}, Type: `{}`"
+      raise TypeError("Expected output of class `{}`. Returned: {}, Class: `{}`"
                       .format(misc.cls_fullname(self._cls),
                               instance,
                               misc.cls_fullname(type(instance))))

@@ -16,6 +16,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import inspect
 import json
 import os
 
@@ -42,7 +43,7 @@ def create_mfr(cls, fct_fn_dict, keyword_mode=None):
 
 
 def cls_to_qualname_id(cls, sep="_"):
-  if not isinstance(cls, type):
+  if inspect.isclass(cls):
     # TODO: Add error message
     raise TypeError("`cls` must be a class. Given: {}".format(cls))
   fmt = "%s" + sep + "%s"
@@ -50,7 +51,7 @@ def cls_to_qualname_id(cls, sep="_"):
 
 
 def cls_fullname(cls):
-  if not isinstance(cls, type):
+  if inspect.isclass(cls):
     raise TypeError("`cls` must be a class. Given: {}".format(cls))
   if cls.__module__ == "builtins": return cls.__name__
   return "%s.%s" % (cls.__module__, cls.__name__)
