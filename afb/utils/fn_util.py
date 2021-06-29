@@ -167,7 +167,7 @@ def maybe_call(obj_or_fn, cls):
 
   raise TypeError(
       "A `{}` or a zero-argument function that returns an instance "
-      "of it is expected. Given: {}".format(misc.cls_fullname(cls), obj_or_fn))
+      "of it is expected. Given: {}".format(misc.qualname(cls), obj_or_fn))
 
 
 def call_from_file(depth=0):

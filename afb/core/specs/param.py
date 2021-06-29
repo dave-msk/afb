@@ -22,18 +22,19 @@ from afb.core.specs import type_
 from afb.utils import errors
 from afb.utils import validate
 
+from afb.utils import deprecation
+
 
 class ParameterSpec(object):
   def __init__(self, type, description="", required=False, forced=None):
     self._type_spec = type_.TypeSpec.parse(type)
     self._description = description
-    if forced is not None:
-      # TODO: Add deprecation warning. Use `required` instead
-      required = forced
+    required = deprecation.handle_renamed_arg("required", required,
+                                              "forced", forced)
     self._required = required
 
-  # TODO: Add deprecation warning. Use property `required` instead.
   @property
+  @deprecation.deprecated("Use property `required` instead", stacklevel=2)
   def forced(self):
     return self.required
 
@@ -49,8 +50,8 @@ class ParameterSpec(object):
   def description(self):
     return self._description
 
-  # TODO: Add deprecation warning. Use `ParameterSpec.parse` instead.
   @classmethod
+  @deprecation.deprecated("Use `ParameterSpec.parse` instead", stacklevel=2)
   def from_raw(cls, raw):
     return cls.parse(raw)
 
@@ -60,7 +61,9 @@ class ParameterSpec(object):
       return spec
 
     if not _is_param_format(spec):
-      # TODO: Add deprecation waring for old format
+      deprecation.warn("Support for non-ParameterSpec format for `spec` will be"
+                       " removed in a future version.",
+                       stacklevel=3)
       spec = {"type": spec}
     _validate_param_spec(spec)
     return cls(**spec)

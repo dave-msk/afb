@@ -19,6 +19,7 @@ from __future__ import print_function
 import inspect
 import json
 import os
+import warnings
 
 import yaml
 
@@ -36,22 +37,26 @@ _mfr_lib = proxy.ModuleProxy("afb.core.manufacturer")
 
 
 def create_mfr(cls, fct_fn_dict, keyword_mode=None):
+  warnings.warn("`{}` is deprecated and will be removed in a future version. "
+                "Use `Manufacturer.from_dict` instead.",
+                category=DeprecationWarning,
+                stacklevel=2)
   if keyword_mode is not None:
-    # TODO: Add deprecation warning
-    pass
+    warnings.warn("`keyword_mode` is not used anymore.",
+                  category=DeprecationWarning,
+                  stacklevel=2)
   return _mfr_lib.Manufacturer.from_dict(cls, fct_fn_dict)
 
 
-def cls_to_qualname_id(cls, sep="_"):
-  if inspect.isclass(cls):
-    # TODO: Add error message
+def qualname_id(cls, sep="_"):
+  if not inspect.isclass(cls):
     raise TypeError("`cls` must be a class. Given: {}".format(cls))
   fmt = "%s" + sep + "%s"
   return fmt % (cls.__module__.replace(".", sep), cls.__name__)
 
 
-def cls_fullname(cls):
-  if inspect.isclass(cls):
+def qualname(cls):
+  if not inspect.isclass(cls):
     raise TypeError("`cls` must be a class. Given: {}".format(cls))
   if cls.__module__ == "builtins": return cls.__name__
   return "%s.%s" % (cls.__module__, cls.__name__)

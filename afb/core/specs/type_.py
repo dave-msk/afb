@@ -104,7 +104,7 @@ class TypeSpec(object):
 
     if type(spec) not in _TS_MAP:
       raise TypeError("`spec` has to be a `type`, `list`, `dict` or `tuple`. "
-                      "Given: {}".format(misc.cls_fullname(type(spec))))
+                      "Given: {}".format(misc.qualname(type(spec))))
 
     iter_fn = fn_util.PostorderDFS(cls._parse_proc)
     return iter_fn(spec)
@@ -143,7 +143,7 @@ class _ClassTypeSpec(TypeSpec):
 
   def markdown_proc(self):
     md_str = "[%s]({%s})" % (self._cls.__name__,
-                             misc.cls_to_qualname_id(self._cls))
+                             misc.qualname_id(self._cls))
     return fn_util.ItemResult((md_str, {self._cls}))
 
   @classmethod

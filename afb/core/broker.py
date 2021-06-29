@@ -24,6 +24,7 @@ from afb.core import primitives
 from afb.core.manufacturer import Manufacturer
 from afb.core.specs import obj_
 from afb.utils import decorators as dc
+from afb.utils import deprecation
 from afb.utils import errors
 from afb.utils import fn_util
 from afb.utils import misc
@@ -82,9 +83,9 @@ class Broker(object):
 
   @property
   def classes(self):
-    return sorted(self._mfrs.keys(), key=lambda c: misc.cls_fullname(c))
+    return sorted(self._mfrs.keys(), key=lambda c: misc.qualname(c))
 
-  # TODO: Mark deprecated. Use `get` instead.
+  @deprecation.deprecated("Use `Broker.get` instead.")
   def get_manufacturer(self, cls):
     return self.get(cls)
 
@@ -127,11 +128,6 @@ class Broker(object):
       mfr = self._mfrs[cls]
     return mfr
 
-  # TODO: Mark `sig`, `params`, `force`, `create_mfr` as deprecated
-  #   `sig` -> `signature`
-  #   `params` -> `defaults`
-  #   `force` -> `override`
-  #   `create_mfr` not used anymore
   # TODO: Breaking changes to API
   def add_factory(self, cls, key, factory, signature, **kwargs):
     """Register factory to `Manufacturer` with specified target class.
@@ -156,19 +152,25 @@ class Broker(object):
           If `False`, an error is raised in case of key collision.
           Defaults to `False`.
     """
-    # TODO: Add deprecation warning
     if "force" in kwargs:
+      deprecation.warn(
+          "Parameter `force` is deprecated. Use `override` instead.",
+          stacklevel=2)
       kwargs["override"] = kwargs.pop("force")
 
     if "params" in kwargs:
+      deprecation.warn(
+        "Parameter `params` is deprecated. Use `defaults` instead.",
+        stacklevel=2)
       kwargs["defaults"] = kwargs.pop("params")
 
     if "create_mfr" in kwargs:
+      deprecation.warn("Parameter `create_mfr` is not used anymore.",
+                       stacklevel=2)
       kwargs.pop("create_mfr")
 
     self._add_factory(cls, key, factory, signature, **kwargs)
 
-  # TODO: Update docstring
   # TODO: Breaking changes to API
   def merge(self, broker, **kwargs):
     """Merge all `Manufacturer`s from given `Broker`.
@@ -203,7 +205,6 @@ class Broker(object):
     """
     self._merge(broker, **kwargs)
 
-  # TODO: Update docstring
   # TODO: Breaking changes to API
   def merge_mfr(self, mfr, **kwargs):
     """Merge `Manufacturer` with the same output class.
@@ -244,7 +245,6 @@ class Broker(object):
     """
     self._merge_mfr(mfr, **kwargs)
 
-  # TODO: Update docstring
   def merge_mfrs(self, mfr_dict, **kwargs):
     """Merge multiple manufacturers for each key.
 
@@ -344,7 +344,7 @@ class Broker(object):
         if not override:
           raise errors.KeyConflictError(
               "Manufacturer with target class `{}` exists."
-              .format(misc.cls_fullname(cls)))
+              .format(misc.qualname(cls)))
         self._mfrs.pop(cls)._bind = None
       mfr._bind(self)  # pylint: disable=protected-access
       self._mfrs[cls] = mfr
@@ -356,7 +356,6 @@ class Broker(object):
         if cls in self._mfrs:
           self._mfrs.pop(cls)
 
-  # TODO: Mark `spec` as deprecated. Specify `key` and `inputs` directly
   def make(self, cls, key=None, inputs=None, spec=None):
     """Create object of specified class via factory.
 
@@ -399,22 +398,23 @@ class Broker(object):
     mfr = self.get_or_create(cls)
 
     if spec is not None:
-      # TODO: Add deprecation warning
-      pass
+      deprecation.warn("Parameter `spec` is deprecated. "
+                       "Specify `key` and `inputs` directly.",
+                       stacklevel=2)
     else:
       spec = {"key": key, "inputs": inputs}
     obj_spec = obj_.ObjectSpec.parse(spec)
 
     return mfr.make(**obj_spec.as_dict())
 
-  # TODO: Mark this method deprecated. Use `export_docs` instead.
+  @deprecation.deprecated("Use `Broker.export_docs` instead.")
   def export_markdown(self,
                       export_dir,
                       cls_dir_fn=None,
                       cls_desc_name=None):
     if (cls_dir_fn, cls_desc_name) != (None, None):
-      # TODO: Add warning
-      warnings.warn("")
+      deprecation.warn(
+          "Parameters `cls_dir_fn` and `cls_desc_name` are not used anymore.")
     return self.export_docs(export_dir)
 
   def export_docs(self, output_dir, **kwargs):

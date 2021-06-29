@@ -28,7 +28,7 @@ def validate_is_callable(obj, name):
 def validate_type(obj, cls, name):
   if obj is not None and not isinstance(obj, cls):
     raise TypeError("\"{}\" must be a \"{}\". Given: {}"
-                    .format(name, misc.cls_fullname(cls), obj))
+                    .format(name, misc.qualname(cls), obj))
 
 
 def validate_args(input_args, all_args):

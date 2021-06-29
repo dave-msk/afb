@@ -131,9 +131,9 @@ class Factory(object):
     instance = self._fn(**kwargs)
     if not isinstance(instance, self._cls):
       raise TypeError("Expected output of class `{}`. Returned: {}, Class: `{}`"
-                      .format(misc.cls_fullname(self._cls),
+                      .format(misc.qualname(self._cls),
                               instance,
-                              misc.cls_fullname(type(instance))))
+                              misc.qualname(type(instance))))
     return instance
 
 

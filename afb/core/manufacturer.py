@@ -24,7 +24,6 @@ import os
 import shutil
 import tempfile
 import threading
-import warnings
 import weakref
 
 from afb.core import factory as fct_lib
@@ -32,6 +31,7 @@ from afb.core import builtins_
 from afb.core.specs import obj_
 from afb.core.specs import type_
 from afb.utils import decorators as dc
+from afb.utils import deprecation
 from afb.utils import errors
 from afb.utils import fn_util
 from afb.utils import keys
@@ -160,7 +160,7 @@ class Manufacturer(object):
     self._default = None
 
     self._exc_proxy = errors.ExceptionProxy()
-    self._exc_prefix = "[{}] ".format(misc.cls_fullname(cls))
+    self._exc_prefix = "[{}] ".format(misc.qualname(cls))
 
     self._builtin_fcts = {}
     self._user_fcts = {}
@@ -200,8 +200,8 @@ class Manufacturer(object):
       raise KeyError("Factory not found: {}".format(key))
     self._default = key
 
-  # TODO: Mark as deprecated.
   @property
+  @deprecation.deprecated(stacklevel=2)
   def factories(self):
     return copy.deepcopy(self._user_fcts)
 
@@ -212,7 +212,7 @@ class Manufacturer(object):
   def __contains__(self, key):
     return key in self._builtin_fcts or key in self._user_fcts
 
-  # TODO: Mark deprecated. v=1.5.0, use `in` operator instead.
+  @deprecation.deprecated("Use `in` operator instead.")
   def has_method(self, key):
     return key in self
 
@@ -237,7 +237,6 @@ class Manufacturer(object):
     reg = self._builtin_fcts if keys.is_reserved(key) else self._user_fcts
     return reg.get(key)
 
-  # TODO: Mark `force` as deprecated. Use `override` instead.
   @_mark_target_class_in_exc
   def merge(self,
             mfr,
@@ -287,10 +286,8 @@ class Manufacturer(object):
             returns an instance of it.
         - Target of `mfr` is not a subclass of this target.
     """
-    if force is not None:
-      # TODO: Add deprecation warning
-      override = force
-
+    override = deprecation.handle_renamed_arg("override", override,
+                                              "force", force)
     mfr = fn_util.maybe_call(mfr, Manufacturer)
 
     self._validate_merge(mfr, root, override, ignore_collision, sep)
@@ -300,7 +297,6 @@ class Manufacturer(object):
                 ignore_collision=ignore_collision,
                 sep=sep)
 
-  # TODO: Mark `force` as deprecated. Use `override` instead
   @_mark_target_class_in_exc
   def merge_all(self, mfr_dict, **kwargs):
     """Merges multiple manufacturers.
@@ -331,8 +327,10 @@ class Manufacturer(object):
         - Any values of `mfr_dict` is not one of the described ones above.
         - Target of any `Manufacturer` that is not a subclass of this target.
     """
-    if "forced" in kwargs:
-      # TODO: Add deprecation warning
+    if "force" in kwargs:
+      deprecation.warn(
+          "Parameter `force` is deprecated. Use `override` instead.",
+          stacklevel=3)
       kwargs["override"] = kwargs.pop("force")
 
     mfr_dict_validated = collections.defaultdict(list)
@@ -363,14 +361,6 @@ class Manufacturer(object):
         if ignore_collision: continue
         raise
 
-  # TODO: Mark deprecated.
-  @_lock
-  def set_broker(self, broker):
-    """This is intended to be called by the broker in registration."""
-    self._bind(broker)
-
-  # TODO: Mark `params` and `force` as deprecated.
-  #   Use `defaults` and `override` instead.
   @_mark_target_class_in_exc
   def register(self,
                key,
@@ -386,6 +376,10 @@ class Manufacturer(object):
     The `factory` is the callable to be used for object creation. The details of
     each of the factory parameters to be accepted in `Manufacturer.make` needs
     to be specified in `signature`.
+
+    Note that keys with the prefix `afb/` are reserved for built-in factories.
+    User-registered factories with such prefix will NOT be retrievable nor
+    accessible except in merging.
 
     ----------------------------------------------------------------------------
 
@@ -458,12 +452,10 @@ class Manufacturer(object):
         - `factory` is not a callable.
         - `signature` is not a dict with string keys.
     """
-    if force is not None:
-      # TODO: Add deprecation warning
-      override = force
-    if params is not None:
-      # TODO: Add deprecation warning
-      defaults = params
+    override = deprecation.handle_renamed_arg("override", override,
+                                              "force", force)
+    defaults = deprecation.handle_renamed_arg("defaults", defaults,
+                                              "params", params)
     self._register(key,
                    factory,
                    signature,
@@ -471,7 +463,6 @@ class Manufacturer(object):
                    descriptions=descriptions,
                    override=override)
 
-  # TODO: Mark `keyword_mode` as deprecated. Not used anymore
   @_mark_target_class_in_exc
   def register_dict(self, registrants, keyword_mode=None):
     """Registers factories from dictionary.
@@ -565,8 +556,8 @@ class Manufacturer(object):
         - `registrants` is not a `dict`
     """
     if keyword_mode is not None:
-      # TODO: Add deprecation warning
-      pass
+      deprecation.warn("Parameter `keyword_mode` is not used anymore.",
+                       stacklevel=3)
 
     validate.validate_type(registrants, dict, "registrants")
     reg_dicts = [_prep_reg_args(k, r) for k, r in registrants.items()]
@@ -586,7 +577,6 @@ class Manufacturer(object):
     if _builtins and not key_is_reserved:
       key = keys.join_reserved(key)
     elif not _builtins and key_is_reserved:
-      # TODO: Add warning - reserved namespace
       pass
 
     if signature is None and isinstance(factory, fct_lib.Factory):
@@ -617,7 +607,7 @@ class Manufacturer(object):
         if not override:
           raise errors.KeyConflictError(
               "The factory `{}` is already registered.".format(key))
-        # TODO: Add a warning
+        # TODO(david-muk): Might need a warning
       if not isinstance(factory, fct_lib.Factory):
         factory = fct_lib.Factory(self._cls,
                                   factory,
@@ -660,26 +650,21 @@ class Manufacturer(object):
         - `inputs` is not a kwargs dictionary.
         - Specified factory does not return an instance of the target class.
     """
-    if method is not None:
-      # TODO: Add deprecation warning
-      key = method
-    else:
-      key = self.default if key is None else key
+    key = deprecation.handle_renamed_arg("key", key, "method", method)
+    key = self.default if key is None else key
 
     if key is None:
       raise ValueError("[{}] Factory key unspecified."
-                       .format(misc.cls_fullname(self._cls)))
+                       .format(misc.qualname(self._cls)))
 
-    if params is not None:
-      # TODO: Add deprecation warning
-      inputs = params
+    inputs = deprecation.handle_renamed_arg("inputs", inputs, "params", params)
     return self._make(key, inputs)
 
   def _make(self, key, inputs):
     fct = self.get(key)
     if fct is None:
       raise KeyError("[{}] Factory not found: {}"
-                     .format(misc.cls_fullname(self._cls), key))
+                     .format(misc.qualname(self._cls), key))
 
     with self._exc_proxy(prefix="[key: {}]".format(key)):
       validate.validate_kwargs(inputs, "inputs")
@@ -719,7 +704,7 @@ class Manufacturer(object):
     _broker = self._broker
     if _broker is None:
       raise errors.GraphError("Broker not found. Target: {}"
-                              .format(misc.cls_fullname(self._cls)))
+                              .format(misc.qualname(self._cls)))
 
     mfr = self._broker.get_or_create(ts_or_cls)
     fct = mfr.get(obj_or_spec.key)
@@ -727,9 +712,8 @@ class Manufacturer(object):
     if fct is None:
       if ts_or_cls is dict:
         return fn_util.ItemResult(obj_or_spec.raw)
-      # TODO: Invalid object spec
       raise KeyError("No such factory for class {}: {}"
-                     .format(misc.cls_fullname(ts_or_cls), obj_or_spec.key))
+                     .format(misc.qualname(ts_or_cls), obj_or_spec.key))
 
     return fn_util.NodeResult(
         fn_util.FuseCallInfo.partial(fct.call_as_fuse_fn),
@@ -775,7 +759,7 @@ class Manufacturer(object):
       FileExistsError:
         - Path `output_dir/<class>` exists and `overwrite` is False.
     """
-    target = os.path.join(output_dir, misc.cls_fullname(self._cls))
+    target = os.path.join(output_dir, misc.qualname(self._cls))
     if not overwrite and os.path.exists(target):
       raise FileExistsError("\"{}\". Pass `overwrite=True` to overwrite."
                             .format(target))
@@ -794,10 +778,10 @@ class Manufacturer(object):
         tmpl, classes = f.markdown_doc_tmpl()
         args = {"class_name": self._cls.__name__, "factory_key": k}
         for c in classes:
-          ckey = misc.cls_to_qualname_id(c)
+          ckey = misc.qualname_id(c)
           dest = "description.md"
           if c != self._cls:
-            dest = os.path.join("..", misc.cls_fullname(c), dest)
+            dest = os.path.join("..", misc.qualname(c), dest)
           args[ckey] = dest
         fct_file = fct_file_fmt.format(idx)
         with open(os.path.join(tmp_dir, fct_file), "w") as fout:
@@ -832,7 +816,7 @@ class Manufacturer(object):
     if not issubclass(mfr.cls, self.cls):
       raise TypeError(
           "The target of `mfr` must be a subclass of {}. Given: {}"
-          .format(misc.cls_fullname(self.cls), misc.cls_fullname(mfr.cls)))
+          .format(misc.qualname(self.cls), misc.qualname(mfr.cls)))
 
     if override or ignore_collision:
       return
@@ -866,7 +850,8 @@ def _prep_reg_args(key, registrant):
                     "Given: {} ".format(registrant))
 
   if "sig" in registrant:
-    # TODO: Add compatibility warning
+    deprecation.warn("Parameter `sig` is deprecated. Use `signature` instead.",
+                     stacklevel=4)
     registrant["signature"] = registrant.pop("sig")
 
   if any(p not in set(_reg_params) for p in registrant):
