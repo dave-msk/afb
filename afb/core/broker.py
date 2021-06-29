@@ -101,7 +101,7 @@ class Broker(object):
     Raises:
       TypeError: `cls` is not a class.
     """
-    if inspect.isclass(cls):
+    if not inspect.isclass(cls):
       raise TypeError("`cls` must be a class. Given: {}".format(type(cls)))
     return self._mfrs.get(cls)
 

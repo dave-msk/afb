@@ -151,7 +151,7 @@ class Manufacturer(object):
     Args:
       cls: The target class.
     """
-    if inspect.isclass(cls):
+    if not inspect.isclass(cls):
       raise TypeError("`cls` must be a class. Given: {}".format(type(cls)))
 
     self._cls = cls
