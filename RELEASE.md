@@ -1,3 +1,20 @@
+# Release 1.5
+## Major Features And Improvements
+- Added abstractions such as `Factory`, `TypeSpec`, `ObjectSpec`
+- Used iterative implementation for `Manufacturer.make` and `TypeSpec` parsing and formatting. This eliminates the limit of depth of nested objects.
+- Marked keys prefixed `afb/` as reserved for built-in factories.
+- Added `SignatureMixin` for signature inheritance of class constructors
+
+## Bug Fixes and Other Changes
+- Changed filenames of exported markdowns of factories from factory key to indices to avoid invalid path names.
+- Renamed parameters:
+  - `forced` -> `required`
+  - `force` -> `override`
+  - `params` -> `defaults` (in `register`)
+  - `method` -> `key`
+  - `params` -> `inputs` (in `Manufacturer.make`)
+  - `spec` -> `key` and `inputs` (in `Broker.make`)
+
 # Release 1.4
 ## Major Features And Improvements
 - Released factory raw signature restrictions. `Manufacturer` now supports callables with `**kwargs` in its signature, which allows additional parameters to be specified in `signature`, so constructors of inherited classes could be more compact.
