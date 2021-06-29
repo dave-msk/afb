@@ -38,10 +38,9 @@ _dep_lib = proxy.ModuleProxy("afb.utils.deprecation")
 def create_mfr(cls, fct_fn_dict, keyword_mode=None):
   _dep_lib.warn("`{}` is deprecated and will be removed in a future version. "
                 "Use `Manufacturer.from_dict` instead."
-                .format(qualname(create_mfr)),
-                stacklevel=2)
+                .format(qualname(create_mfr)))
   if keyword_mode is not None:
-    _dep_lib.warn("`keyword_mode` is not used anymore.", stacklevel=2)
+    _dep_lib.warn("`keyword_mode` is not used anymore.")
   return _mfr_lib.Manufacturer.from_dict(cls, fct_fn_dict)
 
 

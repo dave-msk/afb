@@ -201,7 +201,7 @@ class Manufacturer(object):
     self._default = key
 
   @property
-  @deprecation.deprecated(stacklevel=2)
+  @deprecation.deprecated()
   def factories(self):
     return copy.deepcopy(self._user_fcts)
 
@@ -329,8 +329,7 @@ class Manufacturer(object):
     """
     if "force" in kwargs:
       deprecation.warn(
-          "Parameter `force` is deprecated. Use `override` instead.",
-          stacklevel=3)
+          "Parameter `force` is deprecated. Use `override` instead.")
       kwargs["override"] = kwargs.pop("force")
 
     mfr_dict_validated = collections.defaultdict(list)
@@ -556,8 +555,7 @@ class Manufacturer(object):
         - `registrants` is not a `dict`
     """
     if keyword_mode is not None:
-      deprecation.warn("Parameter `keyword_mode` is not used anymore.",
-                       stacklevel=3)
+      deprecation.warn("Parameter `keyword_mode` is not used anymore.")
 
     validate.validate_type(registrants, dict, "registrants")
     reg_dicts = [_prep_reg_args(k, r) for k, r in registrants.items()]
@@ -850,8 +848,7 @@ def _prep_reg_args(key, registrant):
                     "Given: {} ".format(registrant))
 
   if "sig" in registrant:
-    deprecation.warn("Parameter `sig` is deprecated. Use `signature` instead.",
-                     stacklevel=4)
+    deprecation.warn("Parameter `sig` is deprecated. Use `signature` instead.")
     registrant["signature"] = registrant.pop("sig")
 
   if any(p not in set(_reg_params) for p in registrant):

@@ -154,19 +154,16 @@ class Broker(object):
     """
     if "force" in kwargs:
       deprecation.warn(
-          "Parameter `force` is deprecated. Use `override` instead.",
-          stacklevel=2)
+          "Parameter `force` is deprecated. Use `override` instead.")
       kwargs["override"] = kwargs.pop("force")
 
     if "params" in kwargs:
       deprecation.warn(
-        "Parameter `params` is deprecated. Use `defaults` instead.",
-        stacklevel=2)
+        "Parameter `params` is deprecated. Use `defaults` instead.")
       kwargs["defaults"] = kwargs.pop("params")
 
     if "create_mfr" in kwargs:
-      deprecation.warn("Parameter `create_mfr` is not used anymore.",
-                       stacklevel=2)
+      deprecation.warn("Parameter `create_mfr` is not used anymore.")
       kwargs.pop("create_mfr")
 
     self._add_factory(cls, key, factory, signature, **kwargs)
@@ -399,8 +396,7 @@ class Broker(object):
 
     if spec is not None:
       deprecation.warn("Parameter `spec` is deprecated. "
-                       "Specify `key` and `inputs` directly.",
-                       stacklevel=2)
+                       "Specify `key` and `inputs` directly.")
     else:
       spec = {"key": key, "inputs": inputs}
     obj_spec = obj_.ObjectSpec.parse(spec)
