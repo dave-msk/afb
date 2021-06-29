@@ -48,18 +48,14 @@ def create_mfr(cls, fct_fn_dict, keyword_mode=None):
   return _mfr_lib.Manufacturer.from_dict(cls, fct_fn_dict)
 
 
-def qualname_id(cls, sep="_"):
-  if not inspect.isclass(cls):
-    raise TypeError("`cls` must be a class. Given: {}".format(cls))
+def qualname_id(obj, sep="_"):
   fmt = "%s" + sep + "%s"
-  return fmt % (cls.__module__.replace(".", sep), cls.__name__)
+  return fmt % (obj.__module__.replace(".", sep), obj.__name__)
 
 
-def qualname(cls):
-  if not inspect.isclass(cls):
-    raise TypeError("`cls` must be a class. Given: {}".format(cls))
-  if cls.__module__ == "builtins": return cls.__name__
-  return "%s.%s" % (cls.__module__, cls.__name__)
+def qualname(obj):
+  if obj.__module__ == "builtins": return obj.__name__
+  return "%s.%s" % (obj.__module__, obj.__name__)
 
 
 def load_config(config):
