@@ -22,7 +22,7 @@ with open("requirements.txt", "r") as fin:
 
 setuptools.setup(
   name="afb",
-  version="1.4.1",
+  version="1.5.0",
   author="(David) Siu-Kei Muk",
   author_email="david.muk@protonmail.com",
   license="Apache 2.0",
@@ -30,9 +30,8 @@ setuptools.setup(
   long_description=long_description,
   long_description_content_type="text/markdown",
   url="https://github.com/dave-msk/afb",
-  packages=setuptools.find_packages(include=("afb", "afb.*",),
-                                    exclude=("afb.ext", "afb.ext.*",)),
-  download_url="https://github.com/dave-msk/broker/archive/v1.4.1.tar.gz",
+  packages=setuptools.find_packages(include=("afb", "afb.*",)),
+  download_url="https://github.com/dave-msk/broker/archive/v1.5.0.tar.gz",
   keywords=["afb", "factory", "abstract factory", "config"],
   classifiers=[
       "Development Status :: 4 - Beta",
@@ -43,7 +42,6 @@ setuptools.setup(
       "Programming Language :: Python :: 2",
       "Programming Language :: Python :: 2.7",
       "Programming Language :: Python :: 3",
-      "Programming Language :: Python :: 3.4",
       "Programming Language :: Python :: 3.5",
       "Programming Language :: Python :: 3.6",
       "Programming Language :: Python :: 3.7",
@@ -55,5 +53,5 @@ setuptools.setup(
       "Topic :: Software Development :: Object Brokering",
   ],
   install_requires=requirements,
-  python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4",
+  python_requires=">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*, <4",
 )
