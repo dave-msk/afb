@@ -8,6 +8,8 @@ import warnings
 
 from afb.utils import misc
 
+_PRINTED_WARNING_LOCATIONS = set()
+
 
 def handle_renamed_arg(arg_name, arg, old_name, old_arg):
   if old_arg is not None:
@@ -22,7 +24,10 @@ def handle_renamed_arg(arg_name, arg, old_name, old_arg):
 def warn(message, **kwargs):
   kwargs["category"] = DeprecationWarning
   kwargs["stacklevel"] = kwargs.get("stacklevel", 1) + 1
-  warnings.warn(message, **kwargs)
+  call_loc = _call_location(2)
+  if call_loc not in _PRINTED_WARNING_LOCATIONS:
+    warnings.warn(message, **kwargs)
+    _PRINTED_WARNING_LOCATIONS.add(call_loc)
 
 
 def deprecated(message="",
@@ -43,16 +48,15 @@ def deprecated(message="",
     #   2. Performs parameter overriding for renames
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-      warn(fmt.format(misc.qualname(func)), stacklevel=stacklevel + 2)
+      warn(fmt.format(misc.qualname(func)), stacklevel=stacklevel + 1)
       return func(*args, **kwargs)
     return wrapped
 
   return decorator
 
 
-def params_renamed():
-  pass
-
-
-def params_deprecated():
-  pass
+def _call_location(stacklevel=1):
+  f = inspect.currentframe()
+  for _ in range(stacklevel):
+    f = f.f_back
+  return "{}:{}".format(f.f_code.co_filename, f.f_lineno)

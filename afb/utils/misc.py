@@ -16,10 +16,8 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import inspect
 import json
 import os
-import warnings
 
 import yaml
 
@@ -34,17 +32,16 @@ CONFIG_LOADER = {
 }
 
 _mfr_lib = proxy.ModuleProxy("afb.core.manufacturer")
+_dep_lib = proxy.ModuleProxy("afb.utils.deprecation")
 
 
 def create_mfr(cls, fct_fn_dict, keyword_mode=None):
-  warnings.warn("`{}` is deprecated and will be removed in a future version. "
-                "Use `Manufacturer.from_dict` instead.",
-                category=DeprecationWarning,
+  _dep_lib.warn("`{}` is deprecated and will be removed in a future version. "
+                "Use `Manufacturer.from_dict` instead."
+                .format(qualname(create_mfr)),
                 stacklevel=2)
   if keyword_mode is not None:
-    warnings.warn("`keyword_mode` is not used anymore.",
-                  category=DeprecationWarning,
-                  stacklevel=2)
+    _dep_lib.warn("`keyword_mode` is not used anymore.", stacklevel=2)
   return _mfr_lib.Manufacturer.from_dict(cls, fct_fn_dict)
 
 
