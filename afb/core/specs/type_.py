@@ -17,8 +17,8 @@ from __future__ import division
 from __future__ import print_function
 
 from afb.core.specs import obj_
+from afb.utils import algorithms as algs
 from afb.utils import const
-from afb.utils import fn_util
 from afb.utils import errors
 from afb.utils import misc
 
@@ -88,7 +88,7 @@ class TypeSpec(object):
   DO NOT instantiate the classes directly, use `TypeSpec.create` instead.
   """
   def markdown_tmpl(self):
-    iter_fn = fn_util.PostorderDFS(lambda item: item.markdown_proc())
+    iter_fn = algs.PostorderDFS(lambda item: item.markdown_proc())
     return iter_fn(self)
 
   def parse_manifest(self, manifest):
@@ -106,15 +106,15 @@ class TypeSpec(object):
       raise TypeError("`spec` has to be a `type`, `list`, `dict` or `tuple`. "
                       "Given: {}".format(misc.qualname(type(spec))))
 
-    iter_fn = fn_util.PostorderDFS(cls._parse_proc)
+    iter_fn = algs.PostorderDFS(cls._parse_proc)
     return iter_fn(spec)
 
   @classmethod
   def _parse_proc(cls, item):
     if isinstance(item, cls):
-      return fn_util.ItemResult(item)
+      return algs.ItemResult(item)
     ts_cls = _TS_MAP[type(item)]
-    return fn_util.NodeResult(ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
+    return algs.NodeResult(ts_cls.fuse_subspecs, ts_cls.iter_raw(item))
 
   @classmethod
   def pack(cls, *inputs):
@@ -144,7 +144,7 @@ class _ClassTypeSpec(TypeSpec):
   def markdown_proc(self):
     md_str = "[%s]({%s})" % (self._cls.__name__,
                              misc.qualname_id(self._cls))
-    return fn_util.ItemResult((md_str, {self._cls}))
+    return algs.ItemResult((md_str, {self._cls}))
 
   @classmethod
   def pack(cls, *inputs):
@@ -175,7 +175,7 @@ class _ListTypeSpec(TypeSpec):
       yield self._ts, spec
 
   def markdown_proc(self):
-    return fn_util.NodeResult(_MarkdownFuseFn("\\[%s\\]"),
+    return algs.NodeResult(_MarkdownFuseFn("\\[%s\\]"),
                               iter((self._ts,)))
 
   @classmethod
@@ -225,7 +225,7 @@ class _DictTypeSpec(TypeSpec):
 
   def markdown_proc(self):
     fuse_fn = _MarkdownFuseFn("{%s: %s}")
-    return fn_util.NodeResult(fuse_fn, iter((self._ks, self._vs)))
+    return algs.NodeResult(fuse_fn, iter((self._ks, self._vs)))
 
   @classmethod
   def pack(cls, *inputs):
@@ -263,7 +263,7 @@ class _TupleTypeSpec(TypeSpec):
   def markdown_proc(self):
     md_str = "(%s)" % ", ".join("%s" for _ in self._specs)
     fuse_fn = _MarkdownFuseFn(md_str)
-    return fn_util.NodeResult(fuse_fn, iter(self._specs))
+    return algs.NodeResult(fuse_fn, iter(self._specs))
 
   @classmethod
   def pack(cls, *args):

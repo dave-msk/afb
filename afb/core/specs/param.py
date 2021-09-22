@@ -69,11 +69,11 @@ def _validate_param_spec(spec):
   assert isinstance(spec, dict)
 
   if "description" in spec:
-    validate.validate_type(spec["description"], str, "description")
+    validate.is_type(spec["description"], str, "description")
   if "required" in spec:
-    validate.validate_type(spec["required"], bool, "required")
+    validate.is_type(spec["required"], bool, "required")
   if "forced" in spec:
-    validate.validate_type(spec["forced"], bool, "forced")
+    validate.is_type(spec["forced"], bool, "forced")
 
 
 def _is_param_format(spec):

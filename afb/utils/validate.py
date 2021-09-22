@@ -20,18 +20,18 @@ from afb.utils import errors
 from afb.utils import misc
 
 
-def validate_is_callable(obj, name):
+def is_callable(obj, name):
   if not callable(obj):
     raise TypeError("`{}` must be callable. Given: {}".format(name, obj))
 
 
-def validate_type(obj, cls, name):
+def is_type(obj, cls, name):
   if obj is not None and not isinstance(obj, cls):
     raise TypeError("\"{}\" must be a \"{}\". Given: {}"
                     .format(name, misc.qualname(cls), obj))
 
 
-def validate_args(input_args, all_args):
+def check_inputs(input_args, all_args):
   inv_args = set(input_args) - set(all_args)
   if inv_args:
     raise errors.ArgumentError(
@@ -39,7 +39,7 @@ def validate_args(input_args, all_args):
         .format(sorted(all_args), sorted(input_args), sorted(inv_args)))
 
 
-def validate_rqd_args(input_args, rqd_args):
+def check_required_inputs(input_args, rqd_args):
   missing = set(rqd_args) - set(input_args)
   if missing:
     raise errors.ArgumentError(
@@ -47,7 +47,7 @@ def validate_rqd_args(input_args, rqd_args):
         .format(sorted(rqd_args), sorted(input_args), sorted(missing)))
 
 
-def validate_kwargs(obj, name):
+def is_kwargs(obj, name):
   if obj is None:
     return
   if not isinstance(obj, dict):

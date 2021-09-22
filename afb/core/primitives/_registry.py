@@ -18,7 +18,7 @@ from __future__ import print_function
 
 from afb.core import manufacturer
 from afb.core.primitives import dict_lib
-from afb.utils import keys
+from afb.utils import misc
 
 _REGISTRY = {
     bool: {},
@@ -41,7 +41,7 @@ class _PrimitiveManufacturer(manufacturer.Manufacturer):
   def _install_builtins(self):
     super(_PrimitiveManufacturer, self)._install_builtins()
     for k, f in _REGISTRY[self._cls].items():
-      self._register(keys.join_reserved(k), **f())
+      self._register(misc.join_reserved(k), **f())
 
 
 def is_supported(cls):

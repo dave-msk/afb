@@ -334,7 +334,7 @@ class Broker(object):
     [self.register(mfr, **kwargs) for mfr in checked]
 
   def _register(self, mfr, override=False):
-    validate.validate_type(mfr, Manufacturer, "mfr")
+    validate.is_type(mfr, Manufacturer, "mfr")
     cls = mfr.cls
     with self._lock:
       if cls in self._mfrs:

@@ -23,6 +23,8 @@ import yaml
 
 from afb.utils import proxy
 
+SEP = "/"
+_RESERVED = "afb"
 NONE = object()
 
 CONFIG_LOADER = {
@@ -74,3 +76,15 @@ def load_config(config):
     raise TypeError("File content is not a `dict`. Path: {}, Content: {}"
                     .format(config, data))
   return data
+
+
+def is_reserved(name):
+  return name.split(SEP)[0] == _RESERVED
+
+
+def join(*args):
+  return SEP.join(args)
+
+
+def join_reserved(*args):
+  return join(_RESERVED, *args)

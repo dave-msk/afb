@@ -35,8 +35,8 @@ class Factory(object):
                signature,
                descriptions=None,
                defaults=None):
-    validate.validate_type(cls, type, "cls")
-    validate.validate_is_callable(fn, "fn")
+    validate.is_type(cls, type, "cls")
+    validate.is_callable(fn, "fn")
     self._cls = cls
     self._fn = fn
     if not isinstance(signature, Signature):
@@ -167,7 +167,7 @@ class Signature(object):
     optional = collections.OrderedDict()
     missing = []
 
-    fn_arg_spec = fn_util.FnArgSpec.from_fn(fn)
+    fn_arg_spec = fn_util.FnArgSpec.parse(fn)
     for k in fn_arg_spec.required:
       if k in param_specs:
         required[k] = param.ParameterSpec.parse(param_specs.pop(k))

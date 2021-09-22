@@ -30,11 +30,11 @@ from afb.core import factory as fct_lib
 from afb.core import builtins_
 from afb.core.specs import obj_
 from afb.core.specs import type_
+from afb.utils import algorithms as algs
 from afb.utils import decorators as dc
 from afb.utils import deprecation
 from afb.utils import errors
 from afb.utils import fn_util
-from afb.utils import keys
 from afb.utils import misc
 from afb.utils import validate
 
@@ -195,7 +195,7 @@ class Manufacturer(object):
   @_mark_target_class_in_exc
   @_lock
   def default(self, key):
-    validate.validate_type(key, str, "key")
+    validate.is_type(key, str, "key")
     if key is not None and key not in self:
       raise KeyError("Factory not found: {}".format(key))
     self._default = key
@@ -218,7 +218,7 @@ class Manufacturer(object):
 
   def _install_builtins(self):
     for k, make_fct in builtins_.FACTORY_MAKERS.items():
-      self._register(keys.join_reserved(k), _builtins=True, **make_fct(self))
+      self._register(misc.join_reserved(k), _builtins=True, **make_fct(self))
 
   def get(self, key):
     """Retrieves the factory with key.
@@ -234,7 +234,7 @@ class Manufacturer(object):
     Returns:
       The `Factory` referred by `key`, or None if not present.
     """
-    reg = self._builtin_fcts if keys.is_reserved(key) else self._user_fcts
+    reg = self._builtin_fcts if misc.is_reserved(key) else self._user_fcts
     return reg.get(key)
 
   @_mark_target_class_in_exc
@@ -557,7 +557,7 @@ class Manufacturer(object):
     if keyword_mode is not None:
       deprecation.warn("Parameter `keyword_mode` is not used anymore.")
 
-    validate.validate_type(registrants, dict, "registrants")
+    validate.is_type(registrants, dict, "registrants")
     reg_dicts = [_prep_reg_args(k, r) for k, r in registrants.items()]
 
     [self.register(**kwargs) for kwargs in reg_dicts]
@@ -571,9 +571,9 @@ class Manufacturer(object):
                 descriptions=None,
                 override=False,
                 _builtins=False):
-    key_is_reserved = keys.is_reserved(key)
+    key_is_reserved = misc.is_reserved(key)
     if _builtins and not key_is_reserved:
-      key = keys.join_reserved(key)
+      key = misc.join_reserved(key)
     elif not _builtins and key_is_reserved:
       pass
 
@@ -590,14 +590,14 @@ class Manufacturer(object):
 
     # Validate arguments
     # .1 Validate `key`
-    validate.validate_type(key, str, "key")
+    validate.is_type(key, str, "key")
 
     # .2 Validate `factory` and `signature`
     with self._exc_proxy(prefix="[key: {}] ".format(key)):
-      validate.validate_is_callable(factory, "factory")
-      validate.validate_type(signature, dict, "signature")
+      validate.is_callable(factory, "factory")
+      validate.is_type(signature, dict, "signature")
       defaults = defaults or {}
-      validate.validate_kwargs(defaults, "defaults")
+      validate.is_kwargs(defaults, "defaults")
 
     # Register factory.
     with self._lock:
@@ -665,37 +665,37 @@ class Manufacturer(object):
                      .format(misc.qualname(self._cls), key))
 
     with self._exc_proxy(prefix="[key: {}]".format(key)):
-      validate.validate_kwargs(inputs, "inputs")
+      validate.is_kwargs(inputs, "inputs")
 
     # Hold a strong reference of `Broker` if one is bound to avoid
     # unexpected garbage collection during factory tree traversal.
     _broker = self._broker
     root = self._create_exec_tree(key, inputs)
 
-    iter_fn = fn_util.PostorderDFS(_run_exec_tree_proc)
+    iter_fn = algs.PostorderDFS(_run_exec_tree_proc)
     return iter_fn(root)
 
   def _create_exec_tree(self, key, inputs):
     ts = type_.TypeSpec.parse(self._cls)
-    iter_fn = fn_util.PostorderDFS(self._create_exec_tree_proc)
-    return iter_fn((ts, {key: inputs}))
+    dfs = algs.PostorderDFS(self._create_exec_tree_proc)
+    return dfs((ts, {key: inputs}))
 
   def _create_exec_tree_proc(self, item):
     ts_or_cls, obj_or_spec = item
     if ts_or_cls is None:
-      return fn_util.ItemResult(obj_or_spec)
+      return algs.ItemResult(obj_or_spec)
 
     if isinstance(ts_or_cls, type_.TypeSpec):
-      return fn_util.NodeResult(
-          fn_util.FuseCallInfo.partial(ts_or_cls.pack),
+      return algs.NodeResult(
+          fn_util.FnCall.stub(ts_or_cls.pack),
           ts_or_cls.parse_manifest(obj_or_spec))
 
     assert isinstance(ts_or_cls, type)
     if obj_or_spec is None:
-      return fn_util.ItemResult(obj_or_spec)
+      return algs.ItemResult(obj_or_spec)
 
     if obj_.is_direct_object(obj_or_spec, ts_or_cls):
-      return fn_util.ItemResult(obj_or_spec)
+      return algs.ItemResult(obj_or_spec)
 
     assert isinstance(obj_or_spec, obj_.ObjectSpec)
 
@@ -709,12 +709,12 @@ class Manufacturer(object):
 
     if fct is None:
       if ts_or_cls is dict:
-        return fn_util.ItemResult(obj_or_spec.raw)
+        return algs.ItemResult(obj_or_spec.raw)
       raise KeyError("No such factory for class {}: {}"
                      .format(misc.qualname(ts_or_cls), obj_or_spec.key))
 
-    return fn_util.NodeResult(
-        fn_util.FuseCallInfo.partial(fct.call_as_fuse_fn),
+    return algs.NodeResult(
+        fn_util.FnCall.stub(fct.call_as_fuse_fn),
         fct.parse_inputs(obj_or_spec.inputs))
 
   def _all_factory_items(self):
@@ -809,7 +809,7 @@ class Manufacturer(object):
     return mfr
 
   def _validate_merge(self, mfr, key, override, ignore_collision, sep):
-    validate.validate_type(key, str, "key")
+    validate.is_type(key, str, "key")
 
     if not issubclass(mfr.cls, self.cls):
       raise TypeError(
@@ -828,7 +828,7 @@ class Manufacturer(object):
           .format(sorted(collisions)))
 
 
-_reg_params = fn_util.FnArgSpec.from_fn(Manufacturer.register).parameters[2:]
+_reg_params = fn_util.FnArgSpec.parse(Manufacturer.register).parameters[2:]
 
 
 def _merged_name(root, name, sep="/"):
@@ -860,6 +860,6 @@ def _prep_reg_args(key, registrant):
 
 
 def _run_exec_tree_proc(item):
-  if isinstance(item, fn_util.FuseCallInfo):
-    return fn_util.NodeResult(item, iter(item.args))
-  return fn_util.ItemResult(item)
+  if isinstance(item, fn_util.FnCall):
+    return algs.NodeResult(item, iter(item.args))
+  return algs.ItemResult(item)
