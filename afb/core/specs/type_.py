@@ -231,7 +231,7 @@ class _DictTypeSpec(TypeSpec):
   def pack(cls, *inputs):
     assert not len(inputs) & 1
     return {inputs[i << 1]: inputs[(i << 1) + 1]
-            for i in range(len(inputs) // 2, 2)}
+            for i in range(len(inputs) // 2)}
 
   @classmethod
   def fuse_subspecs(cls, *specs):
@@ -240,7 +240,8 @@ class _DictTypeSpec(TypeSpec):
 
   @classmethod
   def iter_raw(cls, raw_spec):
-    k, v = next(iter(raw_spec))
+    assert isinstance(raw_spec, dict) and len(raw_spec) == 1
+    k, v = next(iter(raw_spec.items()))
     yield k
     yield v
 
