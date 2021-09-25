@@ -201,7 +201,8 @@ class Manufacturer(object):
     self._default = key
 
   @property
-  @deprecation.deprecated()
+  @deprecation.deprecated(
+      "Get keys by `.keys()` and retrieve factories with `.get(key)` instead.")
   def factories(self):
     return copy.deepcopy(self._user_fcts)
 
@@ -577,41 +578,39 @@ class Manufacturer(object):
     elif not _builtins and key_is_reserved:
       pass
 
-    if signature is None and isinstance(factory, fct_lib.Factory):
-      # This block is for Manufacturer merges
-      with self._lock:
-        if key in self._user_fcts and not override:
-          raise errors.KeyConflictError("Factory key `{}` exists.".format(key))
-        self._user_fcts[key] = factory
-      return
-
     # Retrieve registry
     registry = self._builtin_fcts if _builtins else self._user_fcts
+    # Key conflict short-circuiting
+    if not override and key in registry:
+      raise errors.KeyConflictError(key)
 
-    # Validate arguments
-    # .1 Validate `key`
-    validate.is_type(key, str, "key")
+    if signature is None:
+      # This block is for Manufacturer merges
+      if not isinstance(factory, fct_lib.Factory):
+        raise errors.InputError()
+    else:
+      # Validate arguments
+      # 1. Validate `key`
+      validate.is_type(key, str, "key")
 
-    # .2 Validate `factory` and `signature`
-    with self._exc_proxy(prefix="[key: {}] ".format(key)):
-      validate.is_callable(factory, "factory")
-      validate.is_type(signature, dict, "signature")
-      defaults = defaults or {}
-      validate.is_kwargs(defaults, "defaults")
+      # 2. Validate `factory` and `signature`
+      with self._exc_proxy(prefix="[key: {}] ".format(key)):
+        validate.is_callable(factory, "factory")
+        validate.is_type(signature, dict, "signature")
+        defaults = defaults or {}
+        validate.is_kwargs(defaults, "defaults")
+
+      # 3. Create `Factory`
+      factory = fct_lib.Factory(self._cls,
+                                factory,
+                                signature,
+                                descriptions=descriptions,
+                                defaults=defaults)
 
     # Register factory.
     with self._lock:
-      if key in registry:
-        if not override:
-          raise errors.KeyConflictError(
-              "The factory `{}` is already registered.".format(key))
-        # TODO(david-muk): Might need a warning
-      if not isinstance(factory, fct_lib.Factory):
-        factory = fct_lib.Factory(self._cls,
-                                  factory,
-                                  signature,
-                                  descriptions=descriptions,
-                                  defaults=defaults)
+      if not override and key in registry:
+        raise errors.KeyConflictError(key)
       registry[key] = factory
 
   def make(self, key=None, inputs=None, method=None, params=None):
@@ -808,7 +807,12 @@ class Manufacturer(object):
     mfr.register_dict(registrants)
     return mfr
 
-  def _validate_merge(self, mfr, key, override, ignore_collision, sep):
+  def _validate_merge(self,
+                      mfr,
+                      key,
+                      override=None,
+                      ignore_collision=None,
+                      sep="/"):
     validate.is_type(key, str, "key")
 
     if not issubclass(mfr.cls, self.cls):

@@ -138,6 +138,11 @@ class _ClassTypeSpec(TypeSpec):
       yield self._cls, manifest
       return
 
+    if not obj_.is_object_spec(manifest):
+      raise errors.InputError(
+          "Manifest is expected to be either an instance of "
+          "or an ObjectSpec for class `{}`. Given: {}"
+          .format(self._cls.__name__, manifest))
     obj_spec = obj_.ObjectSpec.parse(manifest)
     yield self._cls, obj_spec
 

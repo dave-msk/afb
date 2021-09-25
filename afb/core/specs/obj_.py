@@ -107,13 +107,8 @@ class ObjectSpec(object):
   def parse(cls, spec):
     if isinstance(spec, cls):
       return spec
-    if not is_object_spec(spec):
-      raise errors.InvalidFormatError(
-          "`spec` is expected to be in one of the following format:\n"
-          "1. {{factory key (str): {{arg: manifest, ...}}}},\n"
-          '2. {{"key": factory key (str), '
-          '"inputs": {{arg: manifest, ...}}}}\n'
-          "Given: {}".format(spec))
+    assert is_object_spec(spec)
+
     if len(spec) == 2:
       return cls(spec, **spec)
     return cls(spec, *next(iter(spec.items())))

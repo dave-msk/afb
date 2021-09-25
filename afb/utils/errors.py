@@ -39,6 +39,10 @@ class InvalidFormatError(Exception):
   pass
 
 
+class InputError(Exception):
+  pass
+
+
 class GraphError(Exception):
   pass
 
