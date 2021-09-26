@@ -18,9 +18,16 @@ from __future__ import print_function
 
 from absl.testing import absltest
 
-from afb.core import manufacturer as mfr_lib
 from afb.core import broker as bkr_lib
+from afb.core import manufacturer as mfr_lib
 from afb.utils import errors
+from afb.utils import test_helpers
+
+
+_FCTS = test_helpers.FCTS
+_TrivialClass = test_helpers.TrivialClass
+_ValueHolder = test_helpers.ValueHolder
+_Adder = test_helpers.Adder
 
 
 class ManufacturerTest(absltest.TestCase):
@@ -362,118 +369,6 @@ class ManufacturerTest(absltest.TestCase):
     self.assertIn("f2/%s" % k2, sut)
     self.assertIn("f3/%s" % k1, sut)
     self.assertIn("f3/%s" % k2, sut)
-
-
-class _TrivialClass(object):
-  pass
-
-
-class _ValueHolder(object):
-  def __init__(self, value):
-    self._val = value
-
-  @property
-  def value(self):
-    return self._val
-
-
-class _Adder(object):
-  def __init__(self, v1, v2):
-    self._v1 = v1
-    self._v2 = v2
-
-  @property
-  def value(self):
-    return self._v1 + self._v2
-
-
-_FCTS = {
-    _ValueHolder: {
-        "create/int": (
-            _ValueHolder,
-            {
-                "value": {
-                    "type": int,
-                    "description": "Integer. Value to be stored.",
-                },
-            },
-        ),
-        "create/float": (
-            _ValueHolder,
-            {
-                "value": {
-                    "type": float,
-                    "description": "Float. Value to be stored.",
-                },
-            },
-        ),
-        "sum/tuple": (
-            lambda values: _ValueHolder(sum(values)),
-            {
-                "values": {
-                    "type": (int, float, int, float),
-                    "description": "Tuple of (int, float, int, float)."
-                },
-            },
-        ),
-        "sum/list/int": (
-            lambda values: _ValueHolder(sum(values)),
-            {
-                "values": {
-                    "type": [int],
-                    "description": "LIst of int values.",
-                },
-            },
-        ),
-        "sum/list/vh": (
-            lambda vhs: _ValueHolder(sum(vh.value for vh in vhs)),
-            {
-                "vhs": {
-                    "type": [_ValueHolder],
-                    "description": "List of value holders.",
-                },
-            },
-        ),
-        "sum/key-values/vh": (
-            lambda vhd:
-                _ValueHolder(sum(k.value + v.value for k, v in vhd.items())),
-            {
-                "vhd": {
-                    "type": {_ValueHolder: _ValueHolder},
-                    "description": "Dict mapping ValueHolders to ValueHolders.",
-                },
-            },
-        ),
-    },
-    _Adder: {
-        "create/floats": (
-            _Adder,
-            {
-                "v1": {
-                    "type": float,
-                    "description": "First value.",
-                },
-                "v2": {
-                    "type": float,
-                    "description": "Second value.",
-                }
-            },
-        ),
-        "create/vhs": (
-            lambda vh1, vh2: _Adder(vh1.value, vh2.value),
-            {
-                "vh1": {
-                    "type": _ValueHolder,
-                    "description": "First value holder.",
-                },
-                "vh2": {
-                    "type": _ValueHolder,
-                    "description": "Second holder.",
-                },
-            },
-        ),
-    }
-}
 
 
 if __name__ == "__main__":
