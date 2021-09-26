@@ -188,8 +188,6 @@ class ManufacturerTest(absltest.TestCase):
     sut.register("create/int", *_FCTS[_ValueHolder]["create/int"])
     key = "sum/key-values/vh"
     sut.register(key, *_FCTS[_ValueHolder][key])
-
-    # Act
     inputs = {
         "vhd": [(
             {"key": "create/float", "inputs": {"value": 1.0}},
@@ -199,6 +197,8 @@ class ManufacturerTest(absltest.TestCase):
             {"key": "create/float", "inputs": {"value": 4.0}},
         )],
     }
+
+    # Act
     result = sut.make(key=key, inputs=inputs)
 
     # Assert
@@ -218,7 +218,6 @@ class ManufacturerTest(absltest.TestCase):
     sut = bkr.get(_Adder)
     sut.register("create/vhs", *_FCTS[_Adder]["create/vhs"])
 
-    # Act
     vh1_spec = {
         "key": "sum/list/vh",
         "inputs": {
@@ -259,18 +258,20 @@ class ManufacturerTest(absltest.TestCase):
         },
     }
     inputs = {"vh1": vh1_spec, "vh2": vh2_spec}
-    adder = sut.make(key="create/vhs", inputs=inputs)
+
+    # Act
+    result = sut.make(key="create/vhs", inputs=inputs)
 
     # Assert
-    self.assertIsInstance(adder, _Adder)
-    self.assertAlmostEqual(adder.value, 45.0)
+    self.assertIsInstance(result, _Adder)
+    self.assertAlmostEqual(result.value, 45.0)
 
   def test_make_via_default_factory(self):
     bkr = self._create_broker(_ValueHolder)
     sut = bkr.get(_ValueHolder)
     sut.register("create/float", *_FCTS[_ValueHolder]["create/float"])
-
     sut.default = "create/float"
+
     result = sut.make(inputs={"value": 1.0})
 
     self.assertEqual(sut.default, "create/float")
