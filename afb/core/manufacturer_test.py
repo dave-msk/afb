@@ -312,6 +312,16 @@ class ManufacturerTest(absltest.TestCase):
         "or an ObjectSpec for class `int`. Given: 1.0"):
       sut.make(key=key, inputs={"value": 1.0})
 
+  def test_make_with_factory_returning_incompatible_type(self):
+    bkr = self._create_broker(_TrivialClass)
+    sut = bkr.get(_TrivialClass)
+    key = "create/int"
+
+    sut.register(key, *_FCTS[_ValueHolder][key])
+
+    with self.assertRaises(TypeError):
+      sut.make(key=key, inputs={"value": 1})
+
   def test_merge_simple(self):
     sut = mfr_lib.Manufacturer(_ValueHolder)
     sut.register("create/int", *_FCTS[_ValueHolder]["create/int"])
@@ -326,6 +336,13 @@ class ManufacturerTest(absltest.TestCase):
     self.assertIn("create/float", sut)
     self.assertIn("create/int", sut)
     self.assertIn("sum/list/int", sut)
+
+  def test_merge_incompatible(self):
+    sut = mfr_lib.Manufacturer(_ValueHolder)
+    mfr = mfr_lib.Manufacturer(_Adder)
+
+    with self.assertRaises(TypeError):
+      sut.merge(mfr)
 
   def test_merge_simple_with_conflict_not_ignored(self):
     key = "create/int"
