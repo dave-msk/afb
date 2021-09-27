@@ -18,89 +18,75 @@ from __future__ import print_function
 
 from absl.testing import absltest
 
-from afb.core import broker as bkr_lib
 from afb.core import manufacturer as mfr_lib
 from afb.utils import errors
-from afb.utils import test_helpers
-
-
-_FCTS = test_helpers.FCTS
-_TrivialClass = test_helpers.TrivialClass
-_ValueHolder = test_helpers.ValueHolder
-_Adder = test_helpers.Adder
+from afb.utils import test_helpers as helpers
 
 
 class ManufacturerTest(absltest.TestCase):
-  def _create_broker(self, *classes):
-    bkr = bkr_lib.Broker()
-    [bkr.register(mfr_lib.Manufacturer(cls)) for cls in classes]
-    return bkr
-
   def test_initial_default_is_none(self):
-    sut = mfr_lib.Manufacturer(_TrivialClass)
+    sut = mfr_lib.Manufacturer(helpers.TrivialClass)
     self.assertIsNone(sut.default)
 
   def test_default_key_must_be_registered(self):
-    sut = mfr_lib.Manufacturer(_TrivialClass)
+    sut = mfr_lib.Manufacturer(helpers.TrivialClass)
     with self.assertRaises(KeyError):
       sut.default = "not exist"
 
   def test_get_non_exist_factory(self):
-    sut = mfr_lib.Manufacturer(_TrivialClass)
+    sut = mfr_lib.Manufacturer(helpers.TrivialClass)
     self.assertIsNone(sut.get("not exist"))
 
   def test_register_simple(self):
-    sut = mfr_lib.Manufacturer(_ValueHolder)
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
 
     key = "create/int"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     self.assertIn(key, sut)
 
   def test_registered_entry_is_callable(self):
-    sut = mfr_lib.Manufacturer(_ValueHolder)
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
 
     key = "create/int"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     self.assertTrue(callable(sut.get(key)))
 
   def test_register_key_conflict(self):
-    sut = mfr_lib.Manufacturer(_ValueHolder)
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
 
     key = "create/int"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     with self.assertRaisesRegex(errors.KeyConflictError, key):
-      sut.register(key, *_FCTS[_ValueHolder][key])
+      sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
   def test_register_key_override(self):
-    sut = mfr_lib.Manufacturer(_ValueHolder)
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
 
     key = "create/int"
-    sut.register(key,
-                 lambda value: _ValueHolder(value),
-                 {"value": {"type": int}})
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
     factory_1 = sut.get(key)
-    sut.register(key, *_FCTS[_ValueHolder][key], override=True)
+    sut.register(
+        key, **helpers.factory_spec(helpers.ValueHolder, key), override=True)
     factory_2 = sut.get(key)
 
     self.assertIsNot(factory_2, factory_1)
 
   def test_register_dict(self):
     # Arrange
-    sut = mfr_lib.Manufacturer(_ValueHolder)
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
 
     # Act
     regs = {
-        "create/int": _FCTS[_ValueHolder]["create/int"],
-        "create/float": {
-            "factory": _FCTS[_ValueHolder]["create/float"][0],
-            "signature": _FCTS[_ValueHolder]["create/float"][1],
-        },
-        "sum/list/int": lambda: _FCTS[_ValueHolder]["sum/list/int"],
-        "sum/tuple": lambda: {"factory": _FCTS[_ValueHolder]["sum/tuple"][0],
-                              "signature": _FCTS[_ValueHolder]["sum/tuple"][1]},
+        "create/int": helpers.factory_spec(helpers.ValueHolder, "create/int"),
+        "create/float": list(helpers.factory_spec(helpers.ValueHolder,
+                                                  "create/float").values()),
+        "sum/list/int": lambda: helpers.factory_spec(helpers.ValueHolder,
+                                                     "sum/list/int"),
+        "sum/tuple": lambda: list(helpers.factory_spec(helpers.ValueHolder,
+                                                       "sum/tuple").values()),
     }
     sut.register_dict(regs)
 
@@ -111,46 +97,48 @@ class ManufacturerTest(absltest.TestCase):
     self.assertIn("sum/tuple", sut)
 
   def test_make_simple(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
     key = "create/int"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     result = sut.make(key=key, inputs={"value": 1})
 
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertEqual(result.value, 1)
 
   def test_make_with_list_type_spec(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
     key = "sum/list/int"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     result = sut.make(key=key, inputs={"values": [1, 2, 3, 4, 5]})
 
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertEqual(result.value, 15)
 
   def test_make_with_tuple_type_spec(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
     key = "sum/tuple"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     result = sut.make(key=key, inputs={"values": (1, 2.0, 3, 4.0)})
 
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertAlmostEqual(result.value, 10.0)
 
   def test_make_with_dict_type_spec_dict_form(self):
     # Arrange
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
-    sut.register("create/float", *_FCTS[_ValueHolder]["create/float"])
-    sut.register("create/int", *_FCTS[_ValueHolder]["create/int"])
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
+    sut.register("create/float",
+                 **helpers.factory_spec(helpers.ValueHolder, "create/float"))
+    sut.register("create/int",
+                 **helpers.factory_spec(helpers.ValueHolder, "create/int"))
     key = "sum/key-values/vh"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     # Act
     inputs = {
@@ -177,17 +165,19 @@ class ManufacturerTest(absltest.TestCase):
     result = sut.make(key=key, inputs=inputs)
 
     # Assert
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertAlmostEqual(result.value, 10.0)
 
   def test_make_with_dict_type_spec_pair_form(self):
     # Arrange
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
-    sut.register("create/float", *_FCTS[_ValueHolder]["create/float"])
-    sut.register("create/int", *_FCTS[_ValueHolder]["create/int"])
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
+    sut.register("create/float",
+                 **helpers.factory_spec(helpers.ValueHolder, "create/float"))
+    sut.register("create/int",
+                 **helpers.factory_spec(helpers.ValueHolder, "create/int"))
     key = "sum/key-values/vh"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
     inputs = {
         "vhd": [(
             {"key": "create/float", "inputs": {"value": 1.0}},
@@ -202,21 +192,32 @@ class ManufacturerTest(absltest.TestCase):
     result = sut.make(key=key, inputs=inputs)
 
     # Assert
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertAlmostEqual(result.value, 10.0)
 
   def test_make_composite(self):
     # Arrange
-    bkr = self._create_broker(_ValueHolder, _Adder)
-    vh_mfr = bkr.get(_ValueHolder)
-    vh_mfr.register("create/float", *_FCTS[_ValueHolder]["create/float"])
-    vh_mfr.register("create/int", *_FCTS[_ValueHolder]["create/int"])
-    vh_mfr.register("sum/list/vh", *_FCTS[_ValueHolder]["sum/list/vh"])
-    vh_mfr.register("sum/key-values/vh",
-                    *_FCTS[_ValueHolder]["sum/key-values/vh"])
-    vh_mfr.register("sum/tuple", *_FCTS[_ValueHolder]["sum/tuple"])
-    sut = bkr.get(_Adder)
-    sut.register("create/vhs", *_FCTS[_Adder]["create/vhs"])
+    bkr = helpers.create_broker(helpers.ValueHolder, helpers.Adder)
+    vh_mfr = bkr.get(helpers.ValueHolder)
+    vh_mfr.register(
+        "create/float",
+        **helpers.factory_spec(helpers.ValueHolder, "create/float"))
+    vh_mfr.register(
+        "create/int",
+        **helpers.factory_spec(helpers.ValueHolder, "create/int"))
+    vh_mfr.register(
+        "sum/list/vh",
+        **helpers.factory_spec(helpers.ValueHolder, "sum/list/vh"))
+    vh_mfr.register(
+        "sum/key-values/vh",
+        **helpers.factory_spec(helpers.ValueHolder, "sum/key-values/vh"))
+    vh_mfr.register(
+        "sum/tuple",
+        **helpers.factory_spec(helpers.ValueHolder, "sum/tuple"))
+    sut = bkr.get(helpers.Adder)
+    sut.register(
+        "create/vhs",
+        **helpers.factory_spec(helpers.Adder, "create/vhs"))
 
     vh1_spec = {
         "key": "sum/list/vh",
@@ -263,48 +264,55 @@ class ManufacturerTest(absltest.TestCase):
     result = sut.make(key="create/vhs", inputs=inputs)
 
     # Assert
-    self.assertIsInstance(result, _Adder)
+    self.assertIsInstance(result, helpers.Adder)
     self.assertAlmostEqual(result.value, 45.0)
 
   def test_make_via_default_factory(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
-    sut.register("create/float", *_FCTS[_ValueHolder]["create/float"])
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
+    sut.register("create/float",
+                 **helpers.factory_spec(helpers.ValueHolder, "create/float"))
     sut.default = "create/float"
 
     result = sut.make(inputs={"value": 1.0})
 
     self.assertEqual(sut.default, "create/float")
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertAlmostEqual(result.value, 1.0)
 
   def test_make_with_default_parameters(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
     key = "create/float"
-    sut.register(key, *_FCTS[_ValueHolder][key], defaults={"value": 1.0})
+    sut.register(key,
+                 **helpers.factory_spec(helpers.ValueHolder,
+                                        key,
+                                        defaults={"value": 1.0}))
 
     result = sut.make(key=key)
 
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertAlmostEqual(result.value, 1.0)
 
   def test_make_overriding_default_parameters(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
     key = "create/float"
-    sut.register(key, *_FCTS[_ValueHolder][key], defaults={"value": 1.0})
+    sut.register(key,
+                 **helpers.factory_spec(helpers.ValueHolder,
+                                        key,
+                                        defaults={"value": 1.0}))
 
     result = sut.make(key=key, inputs={"value": 2.0})
 
-    self.assertIsInstance(result, _ValueHolder)
+    self.assertIsInstance(result, helpers.ValueHolder)
     self.assertAlmostEqual(result.value, 2.0)
 
   def test_make_with_invalid_input_type(self):
-    bkr = self._create_broker(_ValueHolder)
-    sut = bkr.get(_ValueHolder)
+    bkr = helpers.create_broker(helpers.ValueHolder)
+    sut = bkr.get(helpers.ValueHolder)
     key = "create/int"
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     with self.assertRaisesRegex(
         errors.InputError,
@@ -313,22 +321,28 @@ class ManufacturerTest(absltest.TestCase):
       sut.make(key=key, inputs={"value": 1.0})
 
   def test_make_with_factory_returning_incompatible_type(self):
-    bkr = self._create_broker(_TrivialClass)
-    sut = bkr.get(_TrivialClass)
+    bkr = helpers.create_broker(helpers.TrivialClass)
+    sut = bkr.get(helpers.TrivialClass)
     key = "create/int"
 
-    sut.register(key, *_FCTS[_ValueHolder][key])
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     with self.assertRaises(TypeError):
       sut.make(key=key, inputs={"value": 1})
 
   def test_merge_simple(self):
-    sut = mfr_lib.Manufacturer(_ValueHolder)
-    sut.register("create/int", *_FCTS[_ValueHolder]["create/int"])
-    mfr = mfr_lib.Manufacturer(_ValueHolder)
-    mfr.register("create/float", *_FCTS[_ValueHolder]["create/float"])
-    mfr2 = mfr_lib.Manufacturer(_ValueHolder)
-    mfr2.register("sum/list/int", *_FCTS[_ValueHolder]["sum/list/int"])
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
+    sut.register(
+        "create/int",
+        **helpers.factory_spec(helpers.ValueHolder, "create/int"))
+    mfr = mfr_lib.Manufacturer(helpers.ValueHolder)
+    mfr.register(
+        "create/float",
+        **helpers.factory_spec(helpers.ValueHolder, "create/float"))
+    mfr2 = mfr_lib.Manufacturer(helpers.ValueHolder)
+    mfr2.register(
+        "sum/list/int",
+        **helpers.factory_spec(helpers.ValueHolder, "sum/list/int"))
 
     sut.merge(mfr)
     sut.merge(lambda: mfr2)
@@ -338,28 +352,28 @@ class ManufacturerTest(absltest.TestCase):
     self.assertIn("sum/list/int", sut)
 
   def test_merge_incompatible(self):
-    sut = mfr_lib.Manufacturer(_ValueHolder)
-    mfr = mfr_lib.Manufacturer(_Adder)
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
+    mfr = mfr_lib.Manufacturer(helpers.Adder)
 
     with self.assertRaises(TypeError):
       sut.merge(mfr)
 
   def test_merge_simple_with_conflict_not_ignored(self):
     key = "create/int"
-    sut = mfr_lib.Manufacturer(_ValueHolder)
-    sut.register(key, *_FCTS[_ValueHolder][key])
-    mfr = mfr_lib.Manufacturer(_ValueHolder)
-    mfr.register(key, *_FCTS[_ValueHolder][key])
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
+    mfr = mfr_lib.Manufacturer(helpers.ValueHolder)
+    mfr.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     with self.assertRaisesRegex(errors.KeyConflictError, key):
       sut.merge(mfr, ignore_collision=False)
 
   def test_merge_with_non_empty_root(self):
     key = "create/int"
-    sut = mfr_lib.Manufacturer(_ValueHolder)
-    sut.register(key, *_FCTS[_ValueHolder][key])
-    mfr = mfr_lib.Manufacturer(_ValueHolder)
-    mfr.register(key, *_FCTS[_ValueHolder][key])
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
+    sut.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
+    mfr = mfr_lib.Manufacturer(helpers.ValueHolder)
+    mfr.register(key, **helpers.factory_spec(helpers.ValueHolder, key))
 
     sut.merge(mfr, root="other")
     sut.merge(mfr, root="more", sep=".")
@@ -370,11 +384,11 @@ class ManufacturerTest(absltest.TestCase):
   def test_merge_all(self):
     k1 = "create/int"
     k2 = "create/float"
-    sut = mfr_lib.Manufacturer(_ValueHolder)
-    m1 = mfr_lib.Manufacturer(_ValueHolder)
-    m1.register(k1, *_FCTS[_ValueHolder][k1])
-    m2 = mfr_lib.Manufacturer(_ValueHolder)
-    m2.register(k2, *_FCTS[_ValueHolder][k2])
+    sut = mfr_lib.Manufacturer(helpers.ValueHolder)
+    m1 = mfr_lib.Manufacturer(helpers.ValueHolder)
+    m1.register(k1, **helpers.factory_spec(helpers.ValueHolder, k1))
+    m2 = mfr_lib.Manufacturer(helpers.ValueHolder)
+    m2.register(k2, **helpers.factory_spec(helpers.ValueHolder, k2))
 
     sut.merge_all({None: [m1, lambda: m2],
                    "f1": [m1],
