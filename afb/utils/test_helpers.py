@@ -35,13 +35,12 @@ class ValueHolder(object):
 
 
 class Adder(object):
-  def __init__(self, v1, v2):
-    self._v1 = v1
-    self._v2 = v2
+  def __init__(self, *values):
+    self._values = values
 
   @property
   def value(self):
-    return self._v1 + self._v2
+    return sum(self._values)
 
 
 def factory_spec(cls, key, **kwargs):
@@ -153,7 +152,7 @@ FCTS = {
     },
     Adder: {
         "create/floats": {
-            "factory": Adder,
+            "factory": lambda v1, v2: Adder(v1, v2),
             "signature": {
                 "v1": {
                     "type": float,
@@ -168,6 +167,25 @@ FCTS = {
             "descriptions": {
                 "short": "Creates Adder with two float values.",
                 "long": "Store two float values into an Adder instance.",
+            },
+        },
+        "create/ints": {
+            "factory": lambda v1, v2: Adder(v1, v2),
+            "signature": {
+                "v1": {
+                    "type": int,
+                    "description": "First value.",
+                },
+                "v2": {
+                    "type": int,
+                    "description": "Second value.",
+
+                }
+            },
+            "defaults": None,
+            "descriptions": {
+                "short": "Creates Adder with two int values.",
+                "long": "Store two int values into an Adder instance.",
             },
         },
         "create/vhs": {
@@ -190,5 +208,27 @@ FCTS = {
                         "Adder instance.",
             },
         },
+        "create/ints/with-defaults": {
+            "factory": lambda v1, v2, v3=3, v4=4: Adder(v1, v2, v3, v4),
+            "signature": {
+                "v1": {
+                    "type": int,
+                    "description": "First int value.",
+                },
+                "v2": {
+                    "type": int,
+                    "description": "Second int value.",
+                },
+                "v3": {
+                    "type": int,
+                    "description": "Third int value.",
+                },
+                "v4": {
+                    "type": int,
+                    "description": "Fourth int value, required.",
+                    "required": True,
+                }
+            }
+        }
     }
 }

@@ -33,8 +33,8 @@ class Factory(object):
                cls,
                fn,
                signature,
-               descriptions=None,
-               defaults=None):
+               defaults=None,
+               descriptions=None):
     validate.is_type(cls, type, "cls")
     validate.is_callable(fn, "fn")
     self._cls = cls
