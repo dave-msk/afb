@@ -19,6 +19,7 @@ from __future__ import print_function
 from absl.testing import absltest
 
 from afb.core import factory as fct_lib
+from afb.core.specs import param
 from afb.core.specs import type_
 from afb.utils import errors
 from afb.utils import test_helpers as helpers
@@ -31,7 +32,21 @@ def _create_factory(cls, key, **kwargs):
 
 
 class SignatureTest(absltest.TestCase):
-  pass
+  def test_create(self):
+    fct_spec = helpers.factory_spec(helpers.Adder, "create/ints/with-defaults")
+
+    sut = fct_lib.Signature.create(fct_spec["factory"], fct_spec["signature"])
+
+    self.assertSetEqual(sut.required, {"v1", "v2", "v4"})
+    self.assertSetEqual(sut.names, {"v1", "v2", "v3", "v4"})
+    self.assertIsInstance(sut["v1"], param.ParameterSpec)
+    self.assertIsInstance(sut["v2"], param.ParameterSpec)
+    self.assertIsInstance(sut["v3"], param.ParameterSpec)
+    self.assertIsInstance(sut["v4"], param.ParameterSpec)
+    self.assertIn("v1", sut)
+    self.assertIn("v2", sut)
+    self.assertIn("v3", sut)
+    self.assertIn("v4", sut)
 
 
 class FactoryTest(absltest.TestCase):
