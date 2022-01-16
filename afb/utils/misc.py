@@ -21,8 +21,6 @@ import os
 
 import yaml
 
-from afb.utils import proxy
-
 SEP = "/"
 _RESERVED = "afb"
 NONE = object()
@@ -33,11 +31,11 @@ CONFIG_LOADER = {
     '.json': json.load,
 }
 
-_mfr_lib = proxy.ModuleProxy("afb.core.manufacturer")
-_dep_lib = proxy.ModuleProxy("afb.utils.deprecation")
-
 
 def create_mfr(cls, fct_fn_dict, keyword_mode=None):
+  from afb.utils import _proxy
+  _mfr_lib = _proxy.ModuleProxy("afb.core.manufacturer")
+  _dep_lib = _proxy.ModuleProxy("afb.utils.deprecation")
   _dep_lib.warn("`{}` is deprecated and will be removed in a future version. "
                 "Use `Manufacturer.from_dict` instead."
                 .format(qualname(create_mfr)))
